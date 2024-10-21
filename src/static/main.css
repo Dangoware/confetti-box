@@ -1,0 +1,51 @@
+@import url('https://g2games.dev/assets/fonts/fonts.css');
+@import url('https://g2games.dev/assets/main-style.css');
+
+.file-upload {
+    padding: 20px;
+    position: relative;
+    display: block;
+    font-size: 16pt;
+    font-weight: bold;
+
+    background-color: #fff098;
+    color: black;
+    width: fit-content;
+    border-radius: 13px;
+    border: 2px solid grey;
+
+    margin: 10px auto;
+    cursor: pointer;
+}
+
+progress[value] {
+    border-radius: 5px;
+    /* Reset the default appearance */
+    -webkit-appearance: none;
+    appearance: none;
+
+    width: 100%;
+    height: 100%;
+}
+
+progress[value]::-webkit-progress-bar, progress[value]::-moz-progress-bar {
+    background-color: #a6e3a1;
+    border-radius: 5px;
+}
+
+.progress-box {
+    display: flex;
+    position: relative;
+    width: 500px;
+    height: 20px;
+    margin: 10px auto;
+
+    .progress-value {
+        width: fit-content;
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        translate: -50% -50%;
+        color: black;
+    }
+}
