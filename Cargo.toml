@@ -1,0 +1,9 @@
+[package]
+name = "mochihost"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+maud = { version = "0.26", features = ["rocket"] }
+rocket = "0.5"
+uuid = { version = "1.11.0", features = ["v3", "v4", "v5"] }

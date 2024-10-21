@@ -1,0 +1,12 @@
+[default]
+address = "0.0.0.0"
+port = 8950
+temp_dir = "tmp"
+
+[default.limits]
+form = "1 GiB"
+data-form = "1 GiB"
+file = "1 GiB"
+bytes = "1 GiB"
+json = "1 GiB"
+msgpack = "1 GiB"
