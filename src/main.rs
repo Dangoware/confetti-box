@@ -1,8 +1,13 @@
-use std::path::{Path, PathBuf};
+mod database;
+
+use std::{path::{Path, PathBuf}, sync::{Arc, RwLock}};
 use blake3::Hash;
+use chrono::TimeDelta;
+use database::{Database, MochiFile};
+use log::info;
 use maud::{html, Markup, DOCTYPE, PreEscaped};
 use rocket::{
-    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, tokio::{fs::File, io::AsyncReadExt}, FromForm
+    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, tokio::{fs::File, io::AsyncReadExt}, FromForm, State
 };
 use uuid::Uuid;
 
@@ -10,6 +15,7 @@ fn head(page_title: &str) -> Markup {
     html! {
         (DOCTYPE)
         meta charset="UTF-8";
+        meta name="viewport" content="width=device-width, initial-scale=1";
         title { (page_title) }
         // Javascript stuff for client side handling
         script { (PreEscaped(include_str!("static/form_handler.js"))) }
@@ -39,17 +45,6 @@ fn home() -> Markup {
     }
 }
 
-struct Database {
-    files: Vec<File>
-}
-
-struct MochiFile {
-    /// The original name of the file
-    name: String,
-    /// The hashed contents of the file as a Blake3 hash
-    hash: Hash,
-}
-
 #[derive(FromForm)]
 struct Upload<'r> {
     #[field(name = "fileUpload")]
@@ -58,7 +53,10 @@ struct Upload<'r> {
 
 /// Handle a file upload and store it
 #[post("/upload", data = "<file_data>")]
-async fn handle_upload(mut file_data: Form<Upload<'_>>) -> Result<(), std::io::Error> {
+async fn handle_upload(
+    mut file_data: Form<Upload<'_>>,
+    db: &State<Arc<RwLock<Database>>>
+) -> Result<(), std::io::Error> {
     let mut out_path = PathBuf::from("files/");
 
     // Get temp path and hash it
@@ -66,42 +64,78 @@ async fn handle_upload(mut file_data: Form<Upload<'_>>) -> Result<(), std::io::E
     file_data.file.persist_to(&temp_filename).await?;
     let hash = hash_file(&temp_filename).await?;
 
-    out_path.push(get_filename(
+    let filename = get_filename(
         // TODO: Properly sanitize this...
         file_data.file.raw_name().unwrap().dangerous_unsafe_unsanitized_raw().as_str(),
-        hash
-    ));
+        hash.0
+    );
+    out_path.push(filename);
+
+    let constructed_file = MochiFile::new_with_expiry(
+        file_data.file.raw_name().unwrap().dangerous_unsafe_unsanitized_raw().as_str(),
+        hash.1,
+        hash.0,
+        out_path.clone(),
+        TimeDelta::hours(24)
+    );
 
     // Move it to the new proper place
     std::fs::rename(temp_filename, out_path)?;
 
+    db.write().unwrap().files.insert(constructed_file.get_key(), constructed_file);
+    db.write().unwrap().save();
+
     Ok(())
 }
 
-async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<Hash, std::io::Error> {
+/// Get the Blake3 hash of a file, without reading it all into memory, and also get the size
+async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<(Hash, usize), std::io::Error> {
     let mut file = File::open(input).await?;
     let mut buf = vec![0; 5000000];
     let mut hasher = blake3::Hasher::new();
 
+    let mut total = 0;
     let mut bytes_read = None;
     while bytes_read != Some(0) {
         bytes_read = Some(file.read(&mut buf).await?);
+        total += bytes_read.unwrap();
         hasher.update(&buf[..bytes_read.unwrap()]);
-        dbg!(bytes_read);
     }
 
-    Ok(hasher.finalize())
+    Ok((hasher.finalize(), total))
 }
 
 /// Get a random filename for use as the uploaded file's name
 fn get_filename(name: &str, hash: Hash) -> String {
-    let uuid = hash.to_hex()[0..10].to_string() + "_" + name;
-    uuid
+    hash.to_hex()[0..10].to_string() + "_" + name
 }
 
-#[rocket::launch]
-fn launch() -> _ {
-    rocket::build()
+/*
+/// Handle a file upload and store it
+#[post("/query", data = "<file_data>")]
+async fn handle_upload(
+    mut file_data: Form<Upload<'_>>,
+    db: &State<Arc<RwLock<Database>>>
+) -> Result<(), std::io::Error> {
+
+    Ok(())
+}
+*/
+
+#[rocket::main]
+async fn main() {
+    let database = Arc::new(RwLock::new(Database::open(&"database.mochi")));
+    let local_db = database.clone();
+
+    let rocket = rocket::build()
+        .manage(database)
         .mount("/", routes![home, handle_upload])
         .mount("/files", FileServer::new("files/", Options::Missing | Options::NormalizeDirs))
+        .launch()
+        .await;
+
+    rocket.expect("Server failed to shutdown gracefully");
+
+    info!("Saving database on shutdown...");
+    local_db.write().unwrap().save();
 }
