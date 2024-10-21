@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+blake3 = "1.5.4"
+chrono = "0.4.38"
 maud = { version = "0.26", features = ["rocket"] }
 rand = "0.8"
 rocket = "0.5"
+uuid = { version = "1.11.0", features = ["v4"] }

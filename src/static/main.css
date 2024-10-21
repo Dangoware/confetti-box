@@ -1,6 +1,10 @@
 @import url('https://g2games.dev/assets/fonts/fonts.css');
 @import url('https://g2games.dev/assets/main-style.css');
 
+.main-wrapper {
+    margin: auto;
+}
+
 .file-upload {
     padding: 20px;
     position: relative;
@@ -20,7 +24,6 @@
 
 progress[value] {
     border-radius: 5px;
-    /* Reset the default appearance */
     -webkit-appearance: none;
     appearance: none;
 
@@ -29,6 +32,11 @@ progress[value] {
 }
 
 progress[value]::-webkit-progress-bar, progress[value]::-moz-progress-bar {
+    background-color: #a6e3a1;
+    border-radius: 5px;
+}
+
+progress[value]::-webkit-progress-value {
     background-color: #a6e3a1;
     border-radius: 5px;
 }
