@@ -101,6 +101,10 @@ impl MochiFile {
         &self.name
     }
 
+    pub fn path(&self) -> &PathBuf {
+        &self.filename
+    }
+
     pub fn get_key(&self) -> MochiKey {
         MochiKey {
             name: self.name.clone(),
@@ -110,6 +114,11 @@ impl MochiFile {
 
     pub fn get_expiry(&self) -> DateTime<Utc> {
         self.expiry_datetime
+    }
+
+    pub fn expired(&self) -> bool {
+        let datetime = Utc::now();
+        datetime > self.expiry_datetime
     }
 }
 

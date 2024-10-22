@@ -1,13 +1,13 @@
 mod database;
 
-use std::{path::{Path, PathBuf}, sync::{Arc, RwLock}};
+use std::{fs, path::{Path, PathBuf}, sync::{Arc, RwLock}, time::Duration};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{Database, MochiFile};
-use log::info;
+use log::{debug, info, warn};
 use maud::{html, Markup, DOCTYPE, PreEscaped};
 use rocket::{
-    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, serde::{json::Json, Serialize}, tokio::{fs::File, io::AsyncReadExt}, FromForm, State
+    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt, select, spawn, time}, FromForm, State
 };
 use uuid::Uuid;
 
@@ -132,22 +132,48 @@ fn get_filename(name: &str, hash: Hash) -> String {
     hash.to_hex()[0..10].to_string() + "_" + name
 }
 
-/*
-/// Handle a file upload and store it
-#[post("/query", data = "<file_data>")]
-async fn handle_upload(
-    mut file_data: Form<Upload<'_>>,
-    db: &State<Arc<RwLock<Database>>>
-) -> Result<(), std::io::Error> {
+fn clean_database(db: &Arc<RwLock<Database>>) {
+    info!("Cleaning database");
+    let mut expired_list = Vec::new();
 
-    Ok(())
+    let mut database = db.write().unwrap();
+    for file in &database.files {
+        if file.1.expired() {
+            expired_list.push((file.0.clone(), file.1.clone()));
+        }
+    }
+
+    for file in expired_list {
+        let path = file.1.path();
+        if path.exists() {
+            match fs::remove_file(path) {
+                Ok(_) => (),
+                Err(_) => warn!("Failed to delete path at {:?}", path),
+            }
+        }
+        debug!("Deleted file: {}", file.1.name());
+        database.files.remove(&file.0);
+    }
 }
-*/
 
 #[rocket::main]
 async fn main() {
     let database = Arc::new(RwLock::new(Database::open(&"database.mochi")));
     let local_db = database.clone();
+
+    // Start monitoring thread
+    let (shutdown, mut rx) = tokio::sync::mpsc::channel(1);
+    let cleaner_db = database.clone();
+    spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(60));
+
+        loop {
+            select! {
+                _ = interval.tick() => clean_database(&cleaner_db),
+                _ = rx.recv() => break,
+            };
+        }
+    });
 
     let rocket = rocket::build()
         .manage(database)
@@ -157,6 +183,9 @@ async fn main() {
         .await;
 
     rocket.expect("Server failed to shutdown gracefully");
+
+    info!("Stopping database cleaning thread");
+    shutdown.send(()).await.expect("Failed to stop cleaner thread");
 
     info!("Saving database on shutdown...");
     local_db.write().unwrap().save();
