@@ -42,7 +42,7 @@ impl Database {
         let mut out_path = self.path.clone();
         out_path.set_extension(".bkp");
         let mut file = File::create(&out_path).expect("Could not save!");
-        encode_into_std_write(&self, &mut file, BINCODE_CFG).expect("Could not write out!");
+        encode_into_std_write(self, &mut file, BINCODE_CFG).expect("Could not write out!");
 
         fs::rename(out_path, &self.path).unwrap();
     }

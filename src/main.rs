@@ -154,6 +154,8 @@ fn clean_database(db: &Arc<RwLock<Database>>) {
         debug!("Deleted file: {}", file.1.name());
         database.files.remove(&file.0);
     }
+
+    database.save();
 }
 
 #[rocket::main]
@@ -165,7 +167,7 @@ async fn main() {
     let (shutdown, mut rx) = tokio::sync::mpsc::channel(1);
     let cleaner_db = database.clone();
     spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(60));
+        let mut interval = time::interval(Duration::from_secs(120));
 
         loop {
             select! {
