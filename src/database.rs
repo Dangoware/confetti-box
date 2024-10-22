@@ -3,6 +3,7 @@ use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}};
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use chrono::{DateTime, TimeDelta, Utc};
 use blake3::Hash;
+use rocket::serde::{Deserialize, Serialize};
 
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
@@ -49,7 +50,8 @@ impl Database {
 
 #[derive(Debug, Clone)]
 #[derive(Decode, Encode)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
 pub struct MochiFile {
     /// The original name of the file
     name: String,
@@ -95,17 +97,26 @@ impl MochiFile {
         }
     }
 
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
     pub fn get_key(&self) -> MochiKey {
         MochiKey {
             name: self.name.clone(),
             hash: self.hash
         }
     }
+
+    pub fn get_expiry(&self) -> DateTime<Utc> {
+        self.expiry_datetime
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[derive(Decode, Encode)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Deserialize, Serialize)]
+#[serde(crate = "rocket::serde")]
 pub struct MochiKey {
     name: String,
     #[bincode(with_serde)]

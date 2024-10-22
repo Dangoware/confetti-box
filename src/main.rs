@@ -2,12 +2,12 @@ mod database;
 
 use std::{path::{Path, PathBuf}, sync::{Arc, RwLock}};
 use blake3::Hash;
-use chrono::TimeDelta;
+use chrono::{DateTime, TimeDelta, Utc};
 use database::{Database, MochiFile};
 use log::info;
 use maud::{html, Markup, DOCTYPE, PreEscaped};
 use rocket::{
-    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, tokio::{fs::File, io::AsyncReadExt}, FromForm, State
+    form::Form, fs::{FileServer, Options, TempFile}, get, post, routes, serde::{json::Json, Serialize}, tokio::{fs::File, io::AsyncReadExt}, FromForm, State
 };
 use uuid::Uuid;
 
@@ -18,7 +18,7 @@ fn head(page_title: &str) -> Markup {
         meta name="viewport" content="width=device-width, initial-scale=1";
         title { (page_title) }
         // Javascript stuff for client side handling
-        script { (PreEscaped(include_str!("static/form_handler.js"))) }
+        script { (PreEscaped(include_str!("static/request.js"))) }
         // CSS for styling the sheets
         style { (PreEscaped(include_str!("static/main.css"))) }
     }
@@ -29,16 +29,22 @@ fn home() -> Markup {
     html! {
         (head("Mochi"))
         body {
-            div class="main-wrapper" {
-                form id="uploadForm" {
-                    label for="fileUpload" class="file-upload" onclick="document.getElementById('fileInput').click()" {
-                        "Upload File"
+            main {
+                section class="centered" {
+                    form id="uploadForm" {
+                        label for="fileUpload" class="file-upload" onclick="document.getElementById('fileInput').click()" {
+                            "Upload File"
+                        }
+                        input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
                     }
-                    input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
+                    div class="progress-box" {
+                        progress id="uploadProgress" value="0" max="100" {}
+                        p id="uploadProgressValue" class="progress-value" { "0%" }
+                    }
                 }
-                div class="progress-box" {
-                    progress id="uploadProgress" value="0" max="100" {}
-                    p id="uploadProgressValue" class="progress-value" { "0%" }
+
+                section class="centered" id="uploadedFilesDisplay" {
+                    h2 class="sep center" { "Uploaded Files" }
                 }
             }
         }
@@ -56,7 +62,7 @@ struct Upload<'r> {
 async fn handle_upload(
     mut file_data: Form<Upload<'_>>,
     db: &State<Arc<RwLock<Database>>>
-) -> Result<(), std::io::Error> {
+) -> Result<Json<FileLocation>, std::io::Error> {
     let mut out_path = PathBuf::from("files/");
 
     // Get temp path and hash it
@@ -69,7 +75,7 @@ async fn handle_upload(
         file_data.file.raw_name().unwrap().dangerous_unsafe_unsanitized_raw().as_str(),
         hash.0
     );
-    out_path.push(filename);
+    out_path.push(filename.clone());
 
     let constructed_file = MochiFile::new_with_expiry(
         file_data.file.raw_name().unwrap().dangerous_unsafe_unsanitized_raw().as_str(),
@@ -82,10 +88,26 @@ async fn handle_upload(
     // Move it to the new proper place
     std::fs::rename(temp_filename, out_path)?;
 
-    db.write().unwrap().files.insert(constructed_file.get_key(), constructed_file);
+    db.write().unwrap().files.insert(constructed_file.get_key(), constructed_file.clone());
     db.write().unwrap().save();
 
-    Ok(())
+    let location = FileLocation {
+        name: constructed_file.name().clone(),
+        status: true,
+        url: Some("files/".to_string() + &filename),
+        expires: constructed_file.get_expiry(),
+    };
+
+    Ok(Json(location))
+}
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+struct FileLocation {
+    pub name: String,
+    pub status: bool,
+    pub url: Option<String>,
+    pub expires: DateTime<Utc>,
 }
 
 /// Get the Blake3 hash of a file, without reading it all into memory, and also get the size

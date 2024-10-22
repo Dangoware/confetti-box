@@ -9,8 +9,7 @@ blake3 = { version = "1.5.4", features = ["serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 log = "0.4"
 maud = { version = "0.26", features = ["rocket"] }
-rocket = "0.5"
-serde = { version = "1.0.210", features = ["derive"] }
+rocket = { version = "0.5", features = ["json"] }
 uuid = { version = "1.11.0", features = ["v4"] }
 
 [profile.production]
