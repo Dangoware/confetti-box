@@ -1,11 +1,30 @@
-let progressBar = null;
-let progressValue = null;
-let statusNotifier = null;
+let progressBar;
+let progressValue;
+let statusNotifier;
+let uploadedFilesDisplay;
 
 let uploadInProgress = false;
-let uploadedFilesDisplay = null;
+
+const TOO_LARGE_TEXT = "File is too large!";
+const ERROR_TEXT = "An error occured!";
+
+let MAX_FILESIZE;
+let MAX_DURATION;
 
 async function formSubmit(form) {
+    if (uploadInProgress) {
+        return;
+    }
+
+    // Get file size and don't upload if it's too large
+    let file_upload = document.getElementById("fileInput");
+    let file = file_upload.files[0];
+    if (file.size > MAX_FILESIZE) {
+        progressValue.textContent = TOO_LARGE_TEXT;
+        console.error("Provided file is too large", file.size, "bytes; max", MAX_FILESIZE, "bytes");
+        return;
+    }
+
     let url = "/upload";
     let request = new XMLHttpRequest();
     request.open('POST', url, true);
@@ -19,7 +38,7 @@ async function formSubmit(form) {
     try {
         request.send(new FormData(form));
     } catch (e) {
-        console.log(e);
+        console.error("An error occured while uploading", e);
     }
 
     // Reset the form data since we've successfully submitted it
@@ -28,24 +47,27 @@ async function formSubmit(form) {
 
 function networkErrorHandler(_err) {
     uploadInProgress = false;
-    console.log("An error occured while uploading");
+    console.error("A network error occured while uploading");
     progressValue.textContent = "A network error occured!";
 }
 
 function uploadComplete(response) {
     let target = response.target;
 
-    console.log(target);
     if (target.status === 200) {
         const response = JSON.parse(target.responseText);
 
-        console.log(response);
         if (response.status) {
             progressValue.textContent = "Success";
             addToList(response.name, response.url);
+        } else {
+            console.error("Error uploading", response)
+            progressValue.textContent = response.response;
         }
     } else if (target.status === 413) {
-        progressValue.textContent = "File too large!";
+        progressValue.textContent = TOO_LARGE_TEXT;
+    } else {
+        progressValue.textContent = ERROR_TEXT;
     }
 
     uploadInProgress = false;
@@ -67,18 +89,18 @@ function uploadProgress(progress) {
     }
 }
 
-function attachFormSubmitEvent(formId) {
-    if (uploadInProgress) {
-        return;
-    }
-
-    document.getElementById(formId).addEventListener("submit", formSubmit);
+async function getServerCapabilities() {
+    let capabilities = await fetch("info").then((response) => response.json());
+    MAX_FILESIZE = capabilities.max_filesize;
+    MAX_DURATION = capabilities.max_duration;
 }
 
 document.addEventListener("DOMContentLoaded", function(_event){
-    attachFormSubmitEvent("uploadForm");
+    document.getElementById("uploadForm").addEventListener("submit", formSubmit);
     progressBar = document.getElementById("uploadProgress");
     progressValue = document.getElementById("uploadProgressValue");
     statusNotifier = document.getElementById("uploadStatus");
     uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
-})
+});
+
+getServerCapabilities();

@@ -1,9 +1,10 @@
-use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}};
+use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}, time::Duration};
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use chrono::{DateTime, TimeDelta, Utc};
 use blake3::Hash;
-use rocket::serde::{Deserialize, Serialize};
+use log::{info, warn};
+use rocket::{serde::{Deserialize, Serialize}, tokio::{select, sync::mpsc::Receiver, time}};
 
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
@@ -130,4 +131,58 @@ pub struct MochiKey {
     name: String,
     #[bincode(with_serde)]
     hash: Hash,
+}
+
+/// Clean the database. Removes files which are past their expiry
+/// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
+fn clean_database(db: &Arc<RwLock<Database>>) {
+    let mut database = db.write().unwrap();
+    let files_to_remove: Vec<_> = database.files.iter().filter_map(|e| {
+        if e.1.expired() {
+            // Check if the entry has expired
+            Some((e.0.clone(), e.1.clone()))
+        } else if !e.1.path().try_exists().is_ok_and(|r| r) {
+            // Check if the entry exists
+            Some((e.0.clone(), e.1.clone()))
+        } else {
+            None
+        }
+    }).collect();
+
+    let mut expired = 0;
+    let mut missing = 0;
+    for file in &files_to_remove {
+        let path = file.1.path();
+        // If the path does not exist, there's no reason to try to remove it.
+        if path.try_exists().is_ok_and(|r| r) {
+            match fs::remove_file(path) {
+                Ok(_) => (),
+                Err(e) => warn!("Failed to delete path at {:?}: {e}", path),
+            }
+            expired += 1;
+        } else {
+            missing += 1
+        }
+
+        database.files.remove(&file.0);
+    }
+
+    info!("{} expired and {} missing items cleared from database", expired, missing);
+    database.save();
+}
+
+/// A loop to clean the database periodically.
+pub async fn clean_loop(
+    db: Arc<RwLock<Database>>,
+    mut shutdown_signal: Receiver<()>,
+    interval: Duration,
+) {
+    let mut interval = time::interval(interval);
+
+    loop {
+        select! {
+            _ = interval.tick() => clean_database(&db),
+            _ = shutdown_signal.recv() => break,
+        };
+    }
 }

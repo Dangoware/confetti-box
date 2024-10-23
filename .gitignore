@@ -1,4 +1,6 @@
 /target
 /tmp
 /src/files
+temp_files
 *.mochi
+settings.toml
