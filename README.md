@@ -1,5 +1,5 @@
 # Confetti-Box
-A super simple file host. Inspired by [catbox](catbox.moe) and [Uguu](uguu.se).
+A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](https://uguu.se).
 
 ## Features
 - Entirely self contained, single binary
