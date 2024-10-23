@@ -1,4 +1,4 @@
-# Confetti-Box
+# Confetti-Box 🎉
 A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](https://uguu.se).
 
 ## Features
