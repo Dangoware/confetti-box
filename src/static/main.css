@@ -1,2 +1,16 @@
 @import url('https://g2games.dev/assets/fonts/fonts.css');
 
+body {
+    background-color: black;
+    color: white;
+}
+
+.file_upload {
+    display: block;
+    width: fit-content;
+    padding: 5px;
+    border: 1px solid grey;
+    cursor: pointer;
+    margin: 10px;
+    border-radius: 5px;
+}

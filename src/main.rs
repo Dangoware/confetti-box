@@ -23,6 +23,7 @@ fn head(page_title: &str) -> Markup {
         title { (page_title) }
         // Javascript stuff for client side handling
         script src="request.js" { }
+        link rel="stylesheet" href="main.css";
     }
 }
 
@@ -43,26 +44,28 @@ fn home() -> Markup {
     html! {
         (head("Mochi"))
 
-        div id="durationOptions" {
+        center {
+            div id="durationOptions" {
 
-        }
-
-        form id="uploadForm" {
-            label for="fileUpload" class="file-upload" onclick="document.getElementById('fileInput').click()" {
-                "Upload File"
             }
-            input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
-            br;
-            input type="text" name="duration" minlength="2" maxlength="4";
-        }
 
-        div class="progress-box" {
-            progress id="uploadProgress" value="0" max="100" {}
-            p id="uploadProgressValue" class="progress-value" { "" }
-        }
+            form id="uploadForm" {
+                label for="fileUpload" class="file_upload" onclick="document.getElementById('fileInput').click()" {
+                    "Upload File"
+                }
+                input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
+                br;
+                input type="text" name="duration" minlength="2" maxlength="4";
+            }
 
-        div id="uploadedFilesDisplay" {
-            h2 class="sep center" { "Uploaded Files" }
+            div class="progress_box" {
+                progress id="uploadProgress" value="0" max="100" {}
+                p id="uploadProgressValue" class="progress_value" { "" }
+            }
+
+            div id="uploadedFilesDisplay" {
+                h2 class="sep center" { "Uploaded Files" }
+            }
         }
     }
 }
@@ -223,11 +226,11 @@ async fn main() {
 
     let rocket = rocket::build()
         .mount(
-            config.root_path.clone() + "/",
+            config.server.root_path.clone() + "/",
             routes![home, handle_upload, form_handler_js, stylesheet, server_info]
         )
         .mount(
-            config.root_path.clone() + "/files",
+            config.server.root_path.clone() + "/files",
             FileServer::new("files/", Options::Missing | Options::NormalizeDirs)
         )
         .manage(database)

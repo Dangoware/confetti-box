@@ -9,6 +9,11 @@ const TOO_LARGE_TEXT = "File is too large!";
 const ERROR_TEXT = "An error occured!";
 
 let CAPABILITIES;
+async function getServerCapabilities() {
+    CAPABILITIES = await fetch("info").then((response) => response.json());
+    console.log(CAPABILITIES);
+}
+getServerCapabilities();
 
 async function formSubmit(form) {
     if (uploadInProgress) {
@@ -20,7 +25,10 @@ async function formSubmit(form) {
     let file = file_upload.files[0];
     if (file.size > CAPABILITIES.max_filesize) {
         progressValue.textContent = TOO_LARGE_TEXT;
-        console.error("Provided file is too large", file.size, "bytes; max", CAPABILITIES.max_filesize, "bytes");
+        console.error(
+            "Provided file is too large", file.size, "bytes; max",
+            CAPABILITIES.max_filesize, "bytes"
+        );
         return;
     }
 
@@ -28,6 +36,7 @@ async function formSubmit(form) {
     let request = new XMLHttpRequest();
     request.open('POST', url, true);
 
+    // Set up the listeners
     request.addEventListener('load', uploadComplete, false);
     request.addEventListener('error', networkErrorHandler, false);
     request.upload.addEventListener('progress', uploadProgress, false);
@@ -40,7 +49,7 @@ async function formSubmit(form) {
         console.error("An error occured while uploading", e);
     }
 
-    // Reset the form data since we've successfully submitted it
+    // Reset the form file data since we've successfully submitted it
     form.elements["fileUpload"].value = "";
 }
 
@@ -88,11 +97,6 @@ function uploadProgress(progress) {
     }
 }
 
-async function getServerCapabilities() {
-    CAPABILITIES = await fetch("info").then((response) => response.json());
-    console.log(CAPABILITIES);
-}
-
 document.addEventListener("DOMContentLoaded", function(_event){
     document.getElementById("uploadForm").addEventListener("submit", formSubmit);
     progressBar = document.getElementById("uploadProgress");
@@ -100,5 +104,3 @@ document.addEventListener("DOMContentLoaded", function(_event){
     statusNotifier = document.getElementById("uploadStatus");
     uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
 });
-
-getServerCapabilities();

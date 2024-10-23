@@ -13,10 +13,6 @@ pub struct Settings {
     /// Settings pertaining to duration information
     pub duration: DurationSettings,
 
-    /// The path to the root directory of the program, ex `/filehost/`
-    #[serde(default)]
-    pub root_path: String,
-
     /// The path to the database file
     #[serde(default)]
     pub database_path: PathBuf,
@@ -38,7 +34,6 @@ impl Default for Settings {
         Self {
             max_filesize: 128_000_000,  // 128 MB
             duration: DurationSettings::default(),
-            root_path: "/".into(),
             server: ServerSettings::default(),
             path: "./settings.toml".into(),
             database_path: "./database.mochi".into(),
@@ -84,12 +79,16 @@ impl Settings {
 pub struct ServerSettings {
     pub address: String,
     pub port: u16,
+
+    /// The path to the root directory of the program, ex `/filehost/`
+    pub root_path: String,
 }
 
 impl Default for ServerSettings {
     fn default() -> Self {
         Self {
             address: "127.0.0.1".into(),
+            root_path: "/".into(),
             port: 8955
         }
     }
