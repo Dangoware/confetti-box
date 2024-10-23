@@ -4,7 +4,7 @@ mod settings;
 
 use std::{path::{Path, PathBuf}, sync::{Arc, RwLock}, time::Duration};
 use blake3::Hash;
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, Utc};
 use database::{clean_loop, Database, MochiFile};
 use log::info;
 use rocket::{
@@ -45,17 +45,20 @@ fn home() -> Markup {
         (head("Mochi"))
 
         center {
-            div id="durationOptions" {
+            h1 { "Confetti Box" }
+            div id="durationBox" {
 
             }
 
             form id="uploadForm" {
-                label for="fileUpload" class="file_upload" onclick="document.getElementById('fileInput').click()" {
+                label for="fileUpload"
+                    class="button"
+                    onclick="document.getElementById('fileInput').click()"
+                {
                     "Upload File"
                 }
                 input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
-                br;
-                input type="text" name="duration" minlength="2" maxlength="4";
+                input id="fileDuration" type="text" name="duration" minlength="2" maxlength="7" value="" style="display:none;";
             }
 
             div class="progress_box" {
@@ -64,13 +67,13 @@ fn home() -> Markup {
             }
 
             div id="uploadedFilesDisplay" {
-                h2 class="sep center" { "Uploaded Files" }
+                h2 { "Uploaded Files" }
             }
         }
     }
 }
 
-#[derive(FromForm)]
+#[derive(Debug, FromForm)]
 struct Upload<'r> {
     #[field(name = "fileUpload")]
     file: TempFile<'r>,
@@ -83,16 +86,22 @@ struct Upload<'r> {
 #[post("/upload", data = "<file_data>")]
 async fn handle_upload(
     mut file_data: Form<Upload<'_>>,
-    db: &State<Arc<RwLock<Database>>>
+    db: &State<Arc<RwLock<Database>>>,
+    settings: &State<Settings>,
 ) -> Result<Json<ClientResponse>, std::io::Error> {
     let mut out_path = PathBuf::from("files/");
+    let mut temp_dir = settings.temp_dir.clone();
 
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
-        if t < TimeDelta::days(365) {
-            t
-        } else {
-            TimeDelta::days(365)
+        if t > settings.duration.maximum {
+            return Ok(Json(ClientResponse {
+                status: false,
+                response: "Duration larger than maximum",
+                ..Default::default()
+            }))
         }
+
+        t
     } else {
         return Ok(Json(ClientResponse {
             status: false,
@@ -101,13 +110,20 @@ async fn handle_upload(
         }))
     };
 
+    // TODO: Properly sanitize this...
+    let raw_name = &*file_data.file
+        .raw_name()
+        .unwrap()
+        .dangerous_unsafe_unsanitized_raw()
+        .as_str()
+        .to_string();
+
     // Get temp path and hash it
-    let temp_filename = "temp_files/".to_owned() + &Uuid::new_v4().to_string();
+    temp_dir.push(&Uuid::new_v4().to_string());
+    let temp_filename = temp_dir;
     file_data.file.persist_to(&temp_filename).await?;
     let hash = hash_file(&temp_filename).await?;
 
-    // TODO: Properly sanitize this...
-    let raw_name = file_data.file.raw_name().unwrap().dangerous_unsafe_unsanitized_raw().as_str();
     let filename = get_id(
         raw_name,
         hash.0
@@ -122,6 +138,10 @@ async fn handle_upload(
         expire_time
     );
 
+    if db.read().unwrap().files.contains_key(&constructed_file.get_key()) {
+        info!("Key already in DB");
+    }
+
     // Move it to the new proper place
     std::fs::rename(temp_filename, out_path)?;
 
@@ -130,8 +150,8 @@ async fn handle_upload(
 
     Ok(Json(ClientResponse {
         status: true,
-        name: Some(constructed_file.name().clone()),
-        url: Some("files/".to_string() + &filename),
+        name: constructed_file.name().clone(),
+        url: "files/".to_string() + &filename,
         expires: Some(constructed_file.get_expiry()),
         ..Default::default()
     }))
@@ -146,10 +166,10 @@ struct ClientResponse {
 
     pub response: &'static str,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub url: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<DateTime<Utc>>,
 }
@@ -181,9 +201,9 @@ async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<(Hash, usize), std::io::
 fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
     Json(ServerInfo {
         max_filesize: settings.max_filesize,
-        max_duration: settings.duration.maximum,
-        default_duration: settings.duration.default,
-        allowed_durations: settings.duration.allowed.clone(),
+        max_duration: settings.duration.maximum.num_seconds() as u32,
+        default_duration: settings.duration.default.num_seconds() as u32,
+        allowed_durations: settings.duration.allowed.clone().into_iter().map(|t| t.num_seconds() as u32).collect(),
     })
 }
 

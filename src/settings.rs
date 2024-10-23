@@ -1,5 +1,7 @@
 use std::{fs::{self, File}, io::{self, Read, Write}, path::{Path, PathBuf}};
 
+use chrono::TimeDelta;
+use serde_with::serde_as;
 use rocket::serde::{Deserialize, Serialize};
 
 /// A response to the client from the server
@@ -9,6 +11,11 @@ pub struct Settings {
     /// Maximum filesize in bytes
     #[serde(default)]
     pub max_filesize: u64,
+
+    /// Is overwiting already uploaded files with the same hash allowed, or is
+    /// this a no-op?
+    #[serde(default)]
+    pub overwrite: bool,
 
     /// Settings pertaining to duration information
     pub duration: DurationSettings,
@@ -34,6 +41,7 @@ impl Default for Settings {
         Self {
             max_filesize: 128_000_000,  // 128 MB
             duration: DurationSettings::default(),
+            overwrite: true,
             server: ServerSettings::default(),
             path: "./settings.toml".into(),
             database_path: "./database.mochi".into(),
@@ -94,29 +102,37 @@ impl Default for ServerSettings {
     }
 }
 
+#[serde_as]
 #[derive(Deserialize, Serialize, Debug)]
-#[serde(crate = "rocket::serde")]
 pub struct DurationSettings {
     /// Maximum file lifetime, seconds
     #[serde(default)]
-    pub maximum: u32,
+    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
+    pub maximum: TimeDelta,
 
     /// Default file lifetime, seconds
     #[serde(default)]
-    pub default: u32,
+    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
+    pub default: TimeDelta,
 
     /// List of allowed durations. An empty list means any are allowed.
     #[serde(default)]
-    pub allowed: Vec<u32>,
+    #[serde_as(as = "Vec<serde_with::DurationSeconds<i64>>")]
+    pub allowed: Vec<TimeDelta>,
 }
 
 impl Default for DurationSettings {
     fn default() -> Self {
         Self {
-            maximum: 259_200,   // 72 hours
-            default: 21_600,    // 6 hours
+            maximum: TimeDelta::days(3),   // 72 hours
+            default: TimeDelta::hours(6),    // 6 hours
             // 1 hour, 6 hours, 24 hours, and 48 hours
-            allowed: vec![3600, 21_600, 86_400, 172_800],
+            allowed: vec![
+                TimeDelta::hours(1),
+                TimeDelta::hours(6),
+                TimeDelta::days(1),
+                TimeDelta::days(2),
+            ],
         }
     }
 }

@@ -10,6 +10,8 @@ chrono = { version = "0.4.38", features = ["serde"] }
 log = "0.4"
 maud = { version = "0.26", features = ["rocket"] }
 rocket = { version = "0.5", features = ["json"] }
+serde = { version = "1.0.213", features = ["derive"] }
+serde_with = { version = "3.11.0", features = ["chrono_0_4"] }
 toml = "0.8.19"
 uuid = { version = "1.11.0", features = ["v4"] }
 

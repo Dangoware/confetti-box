@@ -2,6 +2,7 @@ let progressBar;
 let progressValue;
 let statusNotifier;
 let uploadedFilesDisplay;
+let durationBox;
 
 let uploadInProgress = false;
 
@@ -9,11 +10,6 @@ const TOO_LARGE_TEXT = "File is too large!";
 const ERROR_TEXT = "An error occured!";
 
 let CAPABILITIES;
-async function getServerCapabilities() {
-    CAPABILITIES = await fetch("info").then((response) => response.json());
-    console.log(CAPABILITIES);
-}
-getServerCapabilities();
 
 async function formSubmit(form) {
     if (uploadInProgress) {
@@ -103,4 +99,34 @@ document.addEventListener("DOMContentLoaded", function(_event){
     progressValue = document.getElementById("uploadProgressValue");
     statusNotifier = document.getElementById("uploadStatus");
     uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
+    durationBox = document.getElementById("durationBox");
+
+    getServerCapabilities();
 });
+
+function toPrettyTime(seconds) {
+    var days    = Math.floor(seconds / 86400);
+    var hours   = Math.floor((seconds - (days * 86400)) / 3600);
+    var mins    = Math.floor((seconds - (hours * 3600) - (days * 86400)) / 60);
+    var secs    = seconds - (hours * 3600) - (mins * 60) - (days * 86400);
+
+    if(days == 0) {days = "";} else if(days == 1) {days += "<br>day"} else {days += "<br>days"}
+    if(hours == 0) {hours = "";} else if(hours == 1) {hours += "<br>hour"} else {hours += "<br>hours"}
+    if(mins == 0) {mins = "";} else if(mins == 1) {mins += "<br>minute"} else {mins += "<br>minutes"}
+    if(secs == 0) {secs = "";} else if(secs == 1) {secs += "<br>second"} else {secs += "<br>seconds"}
+
+    return (days + " " + hours + " " + mins + " " + secs).trim();
+}
+
+async function getServerCapabilities() {
+    CAPABILITIES = await fetch("info").then((response) => response.json());
+
+    let file_duration = document.getElementById("fileDuration");
+    file_duration.value = CAPABILITIES.default_duration + "s";
+
+    for (duration in CAPABILITIES.allowed_durations) {
+        const durationOption = durationBox.appendChild(document.createElement("p"));
+        durationOption.innerHTML = toPrettyTime(CAPABILITIES.allowed_durations[duration]);
+        durationOption.classList.add("button");
+    }
+}

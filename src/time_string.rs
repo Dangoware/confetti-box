@@ -3,7 +3,7 @@ use std::error::Error;
 use chrono::TimeDelta;
 
 pub fn parse_time_string(string: &str) -> Result<TimeDelta, Box<dyn Error>> {
-    if string.len() > 5 {
+    if string.len() > 7 {
         return Err("Not valid time string".into())
     }
 
