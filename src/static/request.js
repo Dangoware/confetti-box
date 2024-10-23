@@ -8,8 +8,7 @@ let uploadInProgress = false;
 const TOO_LARGE_TEXT = "File is too large!";
 const ERROR_TEXT = "An error occured!";
 
-let MAX_FILESIZE;
-let MAX_DURATION;
+let CAPABILITIES;
 
 async function formSubmit(form) {
     if (uploadInProgress) {
@@ -19,9 +18,9 @@ async function formSubmit(form) {
     // Get file size and don't upload if it's too large
     let file_upload = document.getElementById("fileInput");
     let file = file_upload.files[0];
-    if (file.size > MAX_FILESIZE) {
+    if (file.size > CAPABILITIES.max_filesize) {
         progressValue.textContent = TOO_LARGE_TEXT;
-        console.error("Provided file is too large", file.size, "bytes; max", MAX_FILESIZE, "bytes");
+        console.error("Provided file is too large", file.size, "bytes; max", CAPABILITIES.max_filesize, "bytes");
         return;
     }
 
@@ -42,7 +41,7 @@ async function formSubmit(form) {
     }
 
     // Reset the form data since we've successfully submitted it
-    form.reset();
+    form.elements["fileUpload"].value = "";
 }
 
 function networkErrorHandler(_err) {
@@ -90,9 +89,8 @@ function uploadProgress(progress) {
 }
 
 async function getServerCapabilities() {
-    let capabilities = await fetch("info").then((response) => response.json());
-    MAX_FILESIZE = capabilities.max_filesize;
-    MAX_DURATION = capabilities.max_duration;
+    CAPABILITIES = await fetch("info").then((response) => response.json());
+    console.log(CAPABILITIES);
 }
 
 document.addEventListener("DOMContentLoaded", function(_event){

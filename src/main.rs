@@ -42,27 +42,27 @@ fn form_handler_js() -> RawJavaScript<&'static str> {
 fn home() -> Markup {
     html! {
         (head("Mochi"))
-        body {
-            main {
-                section class="centered" {
-                    form id="uploadForm" {
-                        label for="fileUpload" class="file-upload" onclick="document.getElementById('fileInput').click()" {
-                            "Upload File"
-                        }
-                        input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
-                        br;
-                        input type="text" name="duration" minlength="2" maxlength="4";
-                    }
-                    div class="progress-box" {
-                        progress id="uploadProgress" value="0" max="100" {}
-                        p id="uploadProgressValue" class="progress-value" { "0%" }
-                    }
-                }
 
-                section class="centered" id="uploadedFilesDisplay" {
-                    h2 class="sep center" { "Uploaded Files" }
-                }
+        div id="durationOptions" {
+
+        }
+
+        form id="uploadForm" {
+            label for="fileUpload" class="file-upload" onclick="document.getElementById('fileInput').click()" {
+                "Upload File"
             }
+            input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
+            br;
+            input type="text" name="duration" minlength="2" maxlength="4";
+        }
+
+        div class="progress-box" {
+            progress id="uploadProgress" value="0" max="100" {}
+            p id="uploadProgressValue" class="progress-value" { "" }
+        }
+
+        div id="uploadedFilesDisplay" {
+            h2 class="sep center" { "Uploaded Files" }
         }
     }
 }
@@ -178,7 +178,9 @@ async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<(Hash, usize), std::io::
 fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
     Json(ServerInfo {
         max_filesize: settings.max_filesize,
-        max_duration: settings.max_duration,
+        max_duration: settings.duration.maximum,
+        default_duration: settings.duration.default,
+        allowed_durations: settings.duration.allowed.clone(),
     })
 }
 
@@ -187,6 +189,9 @@ fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
 struct ServerInfo {
     max_filesize: u64,
     max_duration: u32,
+    default_duration: u32,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    allowed_durations: Vec<u32>,
 }
 
 #[rocket::main]

@@ -7,20 +7,26 @@ use rocket::serde::{Deserialize, Serialize};
 #[serde(crate = "rocket::serde")]
 pub struct Settings {
     /// Maximum filesize in bytes
+    #[serde(default)]
     pub max_filesize: u64,
 
-    /// Maximum file lifetime, seconds
-    pub max_duration: u32,
+    /// Settings pertaining to duration information
+    pub duration: DurationSettings,
 
     /// The path to the root directory of the program, ex `/filehost/`
+    #[serde(default)]
     pub root_path: String,
 
     /// The path to the database file
+    #[serde(default)]
     pub database_path: PathBuf,
 
     /// Temporary directory for stuff
+    #[serde(default)]
     pub temp_dir: PathBuf,
 
+    /// Settings pertaining to the server configuration
+    #[serde(default)]
     pub server: ServerSettings,
 
     #[serde(skip)]
@@ -30,8 +36,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            max_filesize: 128_000_000, // 128MB
-            max_duration: 86_400, // 1 day
+            max_filesize: 128_000_000,  // 128 MB
+            duration: DurationSettings::default(),
             root_path: "/".into(),
             server: ServerSettings::default(),
             path: "./settings.toml".into(),
@@ -85,6 +91,33 @@ impl Default for ServerSettings {
         Self {
             address: "127.0.0.1".into(),
             port: 8955
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+#[serde(crate = "rocket::serde")]
+pub struct DurationSettings {
+    /// Maximum file lifetime, seconds
+    #[serde(default)]
+    pub maximum: u32,
+
+    /// Default file lifetime, seconds
+    #[serde(default)]
+    pub default: u32,
+
+    /// List of allowed durations. An empty list means any are allowed.
+    #[serde(default)]
+    pub allowed: Vec<u32>,
+}
+
+impl Default for DurationSettings {
+    fn default() -> Self {
+        Self {
+            maximum: 259_200,   // 72 hours
+            default: 21_600,    // 6 hours
+            // 1 hour, 6 hours, 24 hours, and 48 hours
+            allowed: vec![3600, 21_600, 86_400, 172_800],
         }
     }
 }
