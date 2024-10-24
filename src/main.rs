@@ -2,7 +2,7 @@ mod database;
 mod strings;
 mod settings;
 
-use std::{fs, path::Path, sync::{Arc, RwLock}};
+use std::{fs, path::Path, sync::{Arc, RwLock}, thread, time::Duration};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
@@ -167,8 +167,19 @@ async fn handle_upload(
         expire_time
     );
 
-    if db.read().unwrap().files.contains_key(&constructed_file.get_key()) {
-        info!("Key already in DB");
+    if !settings.overwrite
+        && db.read().unwrap().files.contains_key(&constructed_file.get_key())
+    {
+        info!("Key already in DB, NOT ADDING");
+        return Ok(Json(ClientResponse {
+            status: true,
+            response: "File already exists",
+            name: constructed_file.name().clone(),
+            url: "files/".to_string() + &filename,
+            hash: hash.0.to_hex()[0..10].to_string(),
+            expires: Some(constructed_file.get_expiry()),
+            ..Default::default()
+        }))
     }
 
     // Move it to the new proper place

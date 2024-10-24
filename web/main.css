@@ -32,7 +32,7 @@ button p {
     margin: 0;
 }
 
-.button {
+button {
     display: block;
     width: fit-content;
     padding: 2px;
@@ -89,23 +89,6 @@ button.main_file_upload {
     vertical-align: center;
 }
 
-.progress_box {
-    display: flex;
-    width: 300px;
-    gap: 5px;
-    align-items: center;
-    height: 70px;
-
-    progress {
-        width: 100%;
-    }
-
-    .progress_value {
-        width: 90px;
-        margin: 0;
-    }
-}
-
 #uploadedFilesDisplay {
     text-align: left;
     min-height: 2em;
@@ -116,14 +99,21 @@ button.main_file_upload {
     overflow: clip;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: block;
 }
 
 #uploadedFilesDisplay p.status {
+    font-family: monospace;
+    font-size: 11pt;
     overflow: clip;
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: right;
-    width: 100%;
+    margin: auto 0;
+    margin-left: auto;
+    width: min-content;
+    flex-shrink: 2;
+    display: block;
 }
 
 #uploadedFilesDisplay div {
@@ -132,21 +122,24 @@ button.main_file_upload {
     gap: 10px;
     padding: 10px;
     margin-bottom: 10px;
+    justify-content: end;
 }
 
 #uploadedFilesDisplay > div > progress {
-    flex-grow: 2;
     height: 20px;
     margin: auto;
+    flex-grow: 2;
+    display: block;
 }
 
 #uploadedFilesDisplay button {
-    height: fit-content;
-    margin: auto;
+    height: 30px;
+    width: 30px;
+    margin: auto 0;
     background-color: white;
 }
 
-progress[value] {
+progress {
     --color: #84FFAE;  /* the progress color */
     --background: lightgrey; /* the background color */
 
@@ -155,22 +148,52 @@ progress[value] {
     appearance: none;
     border-radius: 5px;
     background-color: var(--background);
+    position: relative;
 }
 
-progress[value]::-moz-progress-bar {
+progress::-moz-progress-bar {
     background-color: var(--color);
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
 }
 
-progress[value]::-webkit-progress-bar {
+progress::-webkit-progress-bar {
     background-color: var(--background);
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
 }
 
-progress[value]::-webkit-progress-value {
+progress::-webkit-progress-value {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
     background-color: var(--color);
+}
+
+progress:not([value])::-webkit-progress-bar {
+    background-color: var(--color);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+}
+
+progress:not([value])::-webkit-progress-value {
+    width: 20%;
+    position: absolute;
+    left: 50%;
+}
+
+progress:not([value])::-moz-progress-bar {
+    background-color: var(--color);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+    width: 20%;
+    animation-name: example;
+    animation-duration: 1s;
+    animation-iteration-count: infinite;
+    animation-direction: alternate;
+    animation-timing-function: cubic-bezier(.17,.67,.83,.67);
+}
+
+@keyframes example {
+    from {margin-left: 0%}
+    to {margin-left: 80%}
 }

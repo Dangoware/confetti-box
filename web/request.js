@@ -61,10 +61,18 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
 
     let button = linkRow.appendChild(document.createElement("button"));
     button.textContent = "📝";
+    let buttonTimeout = null;
     button.addEventListener('click', function(e) {
+        if (buttonTimeout) {
+            clearTimeout(buttonTimeout)
+        }
         navigator.clipboard.writeText(
             encodeURI("https://" + window.location.host + "/" + linkAddress)
         )
+        button.textContent = "✅";
+        buttonTimeout = setTimeout(function() {
+            button.textContent = "📝";
+        }, 500);
     })
 
     progressBar.style.display = "none";
@@ -113,8 +121,13 @@ function addNewToList(origFileName) {
 function uploadProgress(progress, progressBar, progressText, linkRow) {
     if (progress.lengthComputable) {
         const progressPercent = Math.floor((progress.loaded / progress.total) * 100);
-        progressBar.value = progressPercent;
-        progressText.textContent = progressPercent + "%";
+        if (progressPercent == 100) {
+            progressBar.removeAttribute("value");
+            progressText.textContent = "⏳";
+        } else {
+            progressBar.value = progressPercent;
+            progressText.textContent = progressPercent + "%";
+        }
     }
 }
 
