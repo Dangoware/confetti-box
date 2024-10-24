@@ -1,6 +1,6 @@
 [package]
-name = "mochihost"
-version = "0.1.0"
+name = "confetti_box"
+version = "0.1.1"
 edition = "2021"
 
 [dependencies]

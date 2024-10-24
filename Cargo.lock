@@ -228,6 +228,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "confetti_box"
+version = "0.1.1"
+dependencies = [
+ "bincode",
+ "blake3",
+ "chrono",
+ "log",
+ "maud",
+ "rocket",
+ "serde",
+ "serde_with",
+ "toml",
+ "uuid",
+]
+
+[[package]]
 name = "constant_time_eq"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -799,22 +815,6 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "mochihost"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "blake3",
- "chrono",
- "log",
- "maud",
- "rocket",
- "serde",
- "serde_with",
- "toml",
- "uuid",
 ]
 
 [[package]]
@@ -1405,9 +1405,9 @@ checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "syn"
-version = "2.0.82"
+version = "2.0.85"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83540f837a8afc019423a8edb95b52a8effe46957ee402287f4292fae35be021"
+checksum = "5023162dfcd14ef8f32034d8bcd4cc5ddc61ef7a247c024a33e24e1f24d21b56"
 dependencies = [
  "proc-macro2",
  "quote",
