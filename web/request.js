@@ -24,13 +24,19 @@ async function formSubmit(form) {
         request.open('POST', "./upload", true);
 
         // Set up event listeners
-        request.upload.addEventListener('progress', (p) => {uploadProgress(p, progressBar, progressText, linkRow)}, false);
-        request.addEventListener('load', (c) => {uploadComplete(c, progressBar, progressText, linkRow)}, false);
-        request.addEventListener('error', (e) => {networkErrorHandler(e, progressBar, progressText, linkRow)}, false);
+        request.upload.addEventListener('progress',
+            (p) => {uploadProgress(p, progressBar, progressText, linkRow)}, false);
+        request.addEventListener('load',
+            (c) => {uploadComplete(c, progressBar, progressText, linkRow)}, false);
+        request.addEventListener('error',
+            (e) => {networkErrorHandler(e, progressBar, progressText, linkRow)}, false);
 
         // Create and send FormData
         try {
-            request.send(new FormData(form));
+            const formData = new FormData();
+            formData.append("fileUpload", file);
+            formData.append("duration", form.elements["duration"].value);
+            request.send(formData);
         } catch (e) {
             makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
             console.error("An error occured while uploading", e);
