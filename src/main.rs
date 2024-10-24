@@ -2,7 +2,7 @@ mod database;
 mod strings;
 mod settings;
 
-use std::{fs, path::Path, sync::{Arc, RwLock}, thread, time::Duration};
+use std::{fs, path::Path, sync::{Arc, RwLock}};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
@@ -55,7 +55,7 @@ fn home(settings: &State<Settings>) -> Markup {
             h2 { "Files up to " (settings.max_filesize.bytes()) " in size are allowed!" }
             hr;
             button.main_file_upload onclick="document.getElementById('fileInput').click()" {
-                h4 { "Upload File" }
+                h4 { "Upload File(s)" }
                 p { "Click or Drag and Drop" }
             }
             h3 { "Expire after:" }

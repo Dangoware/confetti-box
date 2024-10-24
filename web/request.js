@@ -58,21 +58,22 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
     const link = progressText.appendChild(document.createElement("a"));
     link.textContent = hash;
     link.href = linkAddress;
+    link.target = "_blank";
 
     let button = linkRow.appendChild(document.createElement("button"));
     button.textContent = "📝";
     let buttonTimeout = null;
-    button.addEventListener('click', function(e) {
+    button.addEventListener('click', function(_e) {
         if (buttonTimeout) {
             clearTimeout(buttonTimeout)
         }
         navigator.clipboard.writeText(
-            encodeURI("https://" + window.location.host + "/" + linkAddress)
+            encodeURI(window.location.protocol + "//" + window.location.host + "/" + linkAddress)
         )
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
             button.textContent = "📝";
-        }, 500);
+        }, 750);
     })
 
     progressBar.style.display = "none";
