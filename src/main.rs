@@ -8,7 +8,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
 use log::info;
 use rocket::{
-    config, data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
+    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
@@ -31,18 +31,18 @@ fn head(page_title: &str) -> Markup {
 /// Stylesheet
 #[get("/main.css")]
 fn stylesheet() -> RawCss<&'static str> {
-    RawCss(include_str!("static/main.css"))
+    RawCss(include_str!("../web/main.css"))
 }
 
 /// Upload handler javascript
 #[get("/request.js")]
 fn form_handler_js() -> RawJavaScript<&'static str> {
-    RawJavaScript(include_str!("static/request.js"))
+    RawJavaScript(include_str!("../web/request.js"))
 }
 
 #[get("/favicon.svg")]
 fn favicon() -> (ContentType, &'static str) {
-    (ContentType::SVG, include_str!("static/favicon.svg"))
+    (ContentType::SVG, include_str!("../web/favicon.svg"))
 }
 
 #[get("/")]
