@@ -47,6 +47,7 @@ fn favicon() -> (ContentType, &'static str) {
 
 #[get("/")]
 fn home(settings: &State<Settings>) -> Markup {
+    dbg!(settings.duration.default);
     html! {
         (head("Confetti-Box"))
 
@@ -69,7 +70,7 @@ fn home(settings: &State<Settings>) -> Markup {
                 input id="fileInput" type="file" name="fileUpload"
                     onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
                 input id="fileDuration" type="text" name="duration" minlength="2"
-                    maxlength="7" value=(settings.duration.default) style="display:none;";
+                    maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
             }
             button.main_file_upload onclick="document.getElementById('fileInput').click()" {
                 h4 { "Upload File" }
@@ -79,7 +80,7 @@ fn home(settings: &State<Settings>) -> Markup {
 
             h3 { "Uploaded Files" }
             div #uploadedFilesDisplay {
-                div { p {"File Name Here"} span {" "} div {p {"File Link Here"} button {"copy"}} }
+
             }
 
             hr;

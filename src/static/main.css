@@ -116,14 +116,41 @@ button.main_file_upload {
     gap: 10px;
 }
 
-#uploadedFilesDisplay > div > span {
+#uploadedFilesDisplay > div > progress {
     flex-grow: 2;
-    border-top: 2px dotted grey;
-    height: 0px;
+    height: 20px;
     margin: auto;
 }
 
 #uploadedFilesDisplay button {
     height: 50px;
     width: 50px;
+}
+
+progress[value] {
+    --color: #84FFAE;  /* the progress color */
+    --background: lightgrey; /* the background color */
+
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-color: var(--background);
+}
+
+progress[value]::-moz-progress-bar {
+    background-color: var(--color);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+}
+
+progress[value]::-webkit-progress-bar {
+    background-color: var(--background);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+}
+
+progress[value]::-webkit-progress-value {
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
+    background-color: var(--color);
 }
