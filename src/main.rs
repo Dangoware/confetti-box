@@ -2,13 +2,13 @@ mod database;
 mod strings;
 mod settings;
 
-use std::{path::Path, sync::{Arc, RwLock}};
+use std::{fs, path::Path, sync::{Arc, RwLock}};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
 use log::info;
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
+    config, data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
@@ -275,6 +275,14 @@ async fn main() {
     // Get or create config file
     let config = Settings::open(&"./settings.toml")
         .expect("Could not open settings file");
+
+    if !config.temp_dir.try_exists().is_ok_and(|e| e) {
+        fs::create_dir_all(config.temp_dir.clone()).expect("Failed to create temp directory");
+    }
+
+    if !config.file_dir.try_exists().is_ok_and(|e| e) {
+        fs::create_dir_all(config.file_dir.clone()).expect("Failed to create file directory");
+    }
 
     // Set rocket configuration settings
     let rocket_config = Config {
