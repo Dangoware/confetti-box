@@ -29,6 +29,10 @@ pub struct Settings {
     #[serde(default)]
     pub temp_dir: PathBuf,
 
+    /// Directory in which to store hosted files
+    #[serde(default)]
+    pub file_dir: PathBuf,
+
     /// Settings pertaining to the server configuration
     #[serde(default)]
     pub server: ServerSettings,
@@ -46,7 +50,8 @@ impl Default for Settings {
             server: ServerSettings::default(),
             path: "./settings.toml".into(),
             database_path: "./database.mochi".into(),
-            temp_dir: std::env::temp_dir()
+            temp_dir: std::env::temp_dir(),
+            file_dir: "./files/".into(),
         }
     }
 }

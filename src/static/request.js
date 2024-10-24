@@ -2,76 +2,89 @@ let statusNotifier;
 let uploadedFilesDisplay;
 let durationBox;
 
-let uploadInProgress = false;
-
-const TOO_LARGE_TEXT = "File is too large!";
-const ERROR_TEXT = "An error occured!";
+const TOO_LARGE_TEXT = "Too large!";
+const ERROR_TEXT = "Error!";
 
 async function formSubmit(form) {
-    if (uploadInProgress) {
-        return; // TODO: REMOVE THIS ONCE MULTIPLE CAN WORK!
-    }
-
     // Get file size and don't upload if it's too large
     let file_upload = document.getElementById("fileInput");
-    let file = file_upload.files[0];
-    if (file.size > file_upload.dataset.maxFilesize) {
-        progressValue.textContent = TOO_LARGE_TEXT;
-        console.error(
-            "Provided file is too large", file.size, "bytes; max",
-            CAPABILITIES.max_filesize, "bytes"
-        );
-        return;
-    }
 
-    let [progressBar, progressText] = addNewToList(file.name);
+    for (const file of file_upload.files) {
+        let [linkRow, progressBar, progressText] = addNewToList(file.name);
+        if (file.size > file_upload.dataset.maxFilesize) {
+            makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
+            console.error(
+                "Provided file is too large", file.size, "bytes; max",
+                file_upload.dataset.maxFilesize, "bytes"
+            );
+            continue
+        }
 
-    let url = "/upload";
-    let request = new XMLHttpRequest();
-    request.open('POST', url, true);
+        let request = new XMLHttpRequest();
+        request.open('POST', "./upload", true);
 
-    // Set up event listeners
-    request.upload.addEventListener('progress', (p) => {uploadProgress(p, progressBar, progressText)}, false);
-    request.addEventListener('load', (c) => {uploadComplete(c, progressBar, progressText)}, false);
-    request.addEventListener('error', networkErrorHandler, false);
+        // Set up event listeners
+        request.upload.addEventListener('progress', (p) => {uploadProgress(p, progressBar, progressText, linkRow)}, false);
+        request.addEventListener('load', (c) => {uploadComplete(c, progressBar, progressText, linkRow)}, false);
+        request.addEventListener('error', (e) => {networkErrorHandler(e, progressBar, progressText, linkRow)}, false);
 
-    uploadInProgress = true;
-    // Create and send FormData
-    try {
-        request.send(new FormData(form));
-    } catch (e) {
-        console.error("An error occured while uploading", e);
+        // Create and send FormData
+        try {
+            request.send(new FormData(form));
+        } catch (e) {
+            makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
+            console.error("An error occured while uploading", e);
+        }
     }
 
     // Reset the form file data since we've successfully submitted it
     form.elements["fileUpload"].value = "";
 }
 
-function networkErrorHandler(_err) {
-    uploadInProgress = false;
-    console.error("A network error occured while uploading");
-    progressValue.textContent = "A network error occured!";
+function makeErrored(progressBar, progressText, linkRow, errorMessage) {
+    progressText.textContent = errorMessage;
+    progressBar.style.display = "none";
+    linkRow.style.background = "#ffb2ae";
 }
 
-function uploadComplete(response, _progressBar, progressText) {
+function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
+    progressText.textContent = "";
+    const link = progressText.appendChild(document.createElement("a"));
+    link.textContent = hash;
+    link.href = linkAddress;
+
+    let button = linkRow.appendChild(document.createElement("button"));
+    button.textContent = "📝";
+    button.addEventListener('click', function(e) {
+        navigator.clipboard.writeText("https://" + window.location.host + "/" + linkAddress)
+    })
+
+    progressBar.style.display = "none";
+    linkRow.style.background = "#a4ffbb";
+}
+
+function networkErrorHandler(err, progressBar, progressText, linkRow) {
+    makeErrored(progressBar, progressText, linkRow, "A network error occured");
+    console.error("A network error occured while uploading", err);
+}
+
+function uploadComplete(response, progressBar, progressText, linkRow) {
     let target = response.target;
 
     if (target.status === 200) {
         const response = JSON.parse(target.responseText);
 
         if (response.status) {
-            progressText.textContent = "Success";
+            makeFinished(progressBar, progressText, linkRow, response.url, response.hash);
         } else {
             console.error("Error uploading", response)
-            progressText.textContent = response.response;
+            makeErrored(progressBar, progressText, linkRow, response.response);
         }
     } else if (target.status === 413) {
-        progressText.textContent = TOO_LARGE_TEXT;
+        makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
     } else {
-        progressText.textContent = ERROR_TEXT;
+        makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
     }
-
-    uploadInProgress = false;
 }
 
 function addNewToList(origFileName) {
@@ -81,18 +94,18 @@ function addNewToList(origFileName) {
     const progressTxt = linkRow.appendChild(document.createElement("p"));
 
     fileName.textContent = origFileName;
+    fileName.classList.add("file_name");
+    progressTxt.classList.add("status");
     progressBar.max="100";
     progressBar.value="0";
 
-    return [progressBar, progressTxt];
+    return [linkRow, progressBar, progressTxt];
 }
 
-function uploadProgress(progress, progressBar, progressText) {
-    console.log(progress);
+function uploadProgress(progress, progressBar, progressText, linkRow) {
     if (progress.lengthComputable) {
         const progressPercent = Math.floor((progress.loaded / progress.total) * 100);
         progressBar.value = progressPercent;
-        console.log(progressBar.value);
         progressText.textContent = progressPercent + "%";
     }
 }
@@ -104,24 +117,10 @@ document.addEventListener("DOMContentLoaded", function(_event){
     uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
     durationBox = document.getElementById("durationBox");
 
-    getServerCapabilities();
+    initEverything();
 });
 
-function toPrettyTime(seconds) {
-    var days    = Math.floor(seconds / 86400);
-    var hour    = Math.floor((seconds - (days * 86400)) / 3600);
-    var mins    = Math.floor((seconds - (hour * 3600) - (days * 86400)) / 60);
-    var secs    = seconds - (hour * 3600) - (mins * 60) - (days * 86400);
-
-    if(days == 0) {days = "";} else if(days == 1) {days += "<br>day"} else {days += "<br>days"}
-    if(hour == 0) {hour = "";} else if(hour == 1) {hour += "<br>hour"} else {hour += "<br>hours"}
-    if(mins == 0) {mins = "";} else if(mins == 1) {mins += "<br>minute"} else {mins += "<br>minutes"}
-    if(secs == 0) {secs = "";} else if(secs == 1) {secs += "<br>second"} else {secs += "<br>seconds"}
-
-    return (days + " " + hour + " " + mins + " " + secs).trim();
-}
-
-async function getServerCapabilities() {
+async function initEverything() {
     const durationButtons = durationBox.getElementsByTagName("button");
     for (const b of durationButtons) {
         b.addEventListener("click", function (_e) {

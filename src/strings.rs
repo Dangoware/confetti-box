@@ -37,9 +37,9 @@ pub fn parse_time_string(string: &str) -> Result<TimeDelta, Box<dyn Error>> {
 
 pub fn to_pretty_time(seconds: u32) -> String {
     let days = (seconds as f32 / 86400.0).floor();
-    let hour = ((seconds as f32 - (days as f32 * 86400.0)) / 3600.0).floor();
+    let hour = ((seconds as f32 - (days * 86400.0)) / 3600.0).floor();
     let mins = ((seconds as f32 - (hour * 3600.0) - (days * 86400.0)) / 60.0).floor();
-    let secs = seconds as f32 - (hour as f32 * 3600.0) - (mins as f32 * 60.0) - (days as f32 * 86400.0);
+    let secs = seconds as f32 - (hour * 3600.0) - (mins * 60.0) - (days * 86400.0);
 
     let days = if days == 0.0 {"".to_string()} else if days == 1.0 {days.to_string() + "<br>day"} else {days.to_string() + "<br>days"};
     let hour = if hour == 0.0 {"".to_string()} else if hour == 1.0 {hour.to_string() + "<br>hour"} else {hour.to_string() + "<br>hours"};

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}, time::Duration};
+use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}};
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use chrono::{DateTime, TimeDelta, Utc};
@@ -121,6 +121,10 @@ impl MochiFile {
         let datetime = Utc::now();
         datetime > self.expiry_datetime
     }
+
+    pub fn hash(&self) -> &Hash {
+        &self.hash
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -175,9 +179,9 @@ fn clean_database(db: &Arc<RwLock<Database>>) {
 pub async fn clean_loop(
     db: Arc<RwLock<Database>>,
     mut shutdown_signal: Receiver<()>,
-    interval: Duration,
+    interval: TimeDelta,
 ) {
-    let mut interval = time::interval(interval);
+    let mut interval = time::interval(interval.to_std().unwrap());
 
     loop {
         select! {
