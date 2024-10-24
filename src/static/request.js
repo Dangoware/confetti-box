@@ -13,7 +13,7 @@ let CAPABILITIES;
 
 async function formSubmit(form) {
     if (uploadInProgress) {
-        return;
+        return; // TODO: REMOVE THIS ONCE MULTIPLE CAN WORK!
     }
 
     // Get file size and don't upload if it's too large
@@ -57,6 +57,7 @@ function networkErrorHandler(_err) {
 
 function uploadComplete(response) {
     let target = response.target;
+    progressBar.value = 0;
 
     if (target.status === 200) {
         const response = JSON.parse(target.responseText);
@@ -93,10 +94,9 @@ function uploadProgress(progress) {
     }
 }
 
+// This is the entrypoint for everything basically
 document.addEventListener("DOMContentLoaded", function(_event){
     document.getElementById("uploadForm").addEventListener("submit", formSubmit);
-    progressBar = document.getElementById("uploadProgress");
-    progressValue = document.getElementById("uploadProgressValue");
     statusNotifier = document.getElementById("uploadStatus");
     uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
     durationBox = document.getElementById("durationBox");
@@ -106,27 +106,32 @@ document.addEventListener("DOMContentLoaded", function(_event){
 
 function toPrettyTime(seconds) {
     var days    = Math.floor(seconds / 86400);
-    var hours   = Math.floor((seconds - (days * 86400)) / 3600);
-    var mins    = Math.floor((seconds - (hours * 3600) - (days * 86400)) / 60);
-    var secs    = seconds - (hours * 3600) - (mins * 60) - (days * 86400);
+    var hour    = Math.floor((seconds - (days * 86400)) / 3600);
+    var mins    = Math.floor((seconds - (hour * 3600) - (days * 86400)) / 60);
+    var secs    = seconds - (hour * 3600) - (mins * 60) - (days * 86400);
 
     if(days == 0) {days = "";} else if(days == 1) {days += "<br>day"} else {days += "<br>days"}
-    if(hours == 0) {hours = "";} else if(hours == 1) {hours += "<br>hour"} else {hours += "<br>hours"}
+    if(hour == 0) {hour = "";} else if(hour == 1) {hour += "<br>hour"} else {hour += "<br>hours"}
     if(mins == 0) {mins = "";} else if(mins == 1) {mins += "<br>minute"} else {mins += "<br>minutes"}
     if(secs == 0) {secs = "";} else if(secs == 1) {secs += "<br>second"} else {secs += "<br>seconds"}
 
-    return (days + " " + hours + " " + mins + " " + secs).trim();
+    return (days + " " + hour + " " + mins + " " + secs).trim();
 }
 
 async function getServerCapabilities() {
-    CAPABILITIES = await fetch("info").then((response) => response.json());
-
     let file_duration = document.getElementById("fileDuration");
-    file_duration.value = CAPABILITIES.default_duration + "s";
 
-    for (duration in CAPABILITIES.allowed_durations) {
-        const durationOption = durationBox.appendChild(document.createElement("p"));
-        durationOption.innerHTML = toPrettyTime(CAPABILITIES.allowed_durations[duration]);
-        durationOption.classList.add("button");
+    const durationButtons = durationBox.getElementsByTagName("button");
+    for (const b of durationButtons) {
+        b.addEventListener("click", function (_e) {
+            if (this.classList.contains("selected")) {
+                return
+            }
+            let selected = this.parentNode.getElementsByClassName("selected");
+            selected[0].classList.remove("selected");
+
+            file_duration.value = this.dataset.durationSeconds + "s";
+            this.classList.add("selected");
+        });
     }
 }

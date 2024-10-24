@@ -3,6 +3,7 @@ use std::{fs::{self, File}, io::{self, Read, Write}, path::{Path, PathBuf}};
 use chrono::TimeDelta;
 use serde_with::serde_as;
 use rocket::serde::{Deserialize, Serialize};
+use rocket::data::ToByteUnit;
 
 /// A response to the client from the server
 #[derive(Deserialize, Serialize, Debug)]
@@ -39,9 +40,9 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            max_filesize: 128_000_000,  // 128 MB
-            duration: DurationSettings::default(),
+            max_filesize: 1.megabytes().into(),  // 128 MB
             overwrite: true,
+            duration: DurationSettings::default(),
             server: ServerSettings::default(),
             path: "./settings.toml".into(),
             database_path: "./database.mochi".into(),
@@ -97,7 +98,7 @@ impl Default for ServerSettings {
         Self {
             address: "127.0.0.1".into(),
             root_path: "/".into(),
-            port: 8955
+            port: 8950
         }
     }
 }
@@ -115,10 +116,14 @@ pub struct DurationSettings {
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
     pub default: TimeDelta,
 
-    /// List of allowed durations. An empty list means any are allowed.
+    /// List of recommended lifetimes
     #[serde(default)]
     #[serde_as(as = "Vec<serde_with::DurationSeconds<i64>>")]
     pub allowed: Vec<TimeDelta>,
+
+    /// Restrict the input durations to the allowed ones or not
+    #[serde(default)]
+    pub restrict_to_allowed: bool,
 }
 
 impl Default for DurationSettings {
@@ -133,6 +138,7 @@ impl Default for DurationSettings {
                 TimeDelta::days(1),
                 TimeDelta::days(2),
             ],
+            restrict_to_allowed: true,
         }
     }
 }

@@ -1,5 +1,5 @@
 mod database;
-mod time_string;
+mod strings;
 mod settings;
 
 use std::{path::{Path, PathBuf}, sync::{Arc, RwLock}, time::Duration};
@@ -8,12 +8,12 @@ use chrono::{DateTime, Utc};
 use database::{clean_loop, Database, MochiFile};
 use log::info;
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
+    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State, http::ContentType,
 };
 use settings::Settings;
-use time_string::parse_time_string;
+use strings::{parse_time_string, to_pretty_time};
 use uuid::Uuid;
-use maud::{html, Markup, DOCTYPE};
+use maud::{html, Markup, DOCTYPE, PreEscaped};
 
 fn head(page_title: &str) -> Markup {
     html! {
@@ -23,6 +23,7 @@ fn head(page_title: &str) -> Markup {
         title { (page_title) }
         // Javascript stuff for client side handling
         script src="request.js" { }
+        link rel="icon" type="image/svg+xml" href="favicon.svg";
         link rel="stylesheet" href="main.css";
     }
 }
@@ -39,35 +40,55 @@ fn form_handler_js() -> RawJavaScript<&'static str> {
     RawJavaScript(include_str!("static/request.js"))
 }
 
+#[get("/favicon.svg")]
+fn favicon() -> (ContentType, &'static str) {
+    (ContentType::SVG, include_str!("static/favicon.svg"))
+}
+
 #[get("/")]
-fn home() -> Markup {
+fn home(settings: &State<Settings>) -> Markup {
     html! {
-        (head("Mochi"))
+        (head("Confetti-Box"))
 
         center {
-            h1 { "Confetti Box" }
+            h1 { "Confetti-Box 🎉" }
+            h2 { "Files up to " (settings.max_filesize.bytes()) " in size are allowed!" }
+            hr;
+            h3 { "Expire after:" }
             div id="durationBox" {
-
-            }
-
-            form id="uploadForm" {
-                label for="fileUpload"
-                    class="button"
-                    onclick="document.getElementById('fileInput').click()"
-                {
-                    "Upload File"
+                @for d in &settings.duration.allowed {
+                    button.button.{@if settings.duration.default == *d { "selected" }}
+                        data-duration-seconds=(d.num_seconds())
+                    {
+                        (PreEscaped(to_pretty_time(d.num_seconds() as u32)))
+                    }
                 }
-                input id="fileInput" type="file" name="fileUpload" onchange="formSubmit(this.parentNode)" style="display:none;";
-                input id="fileDuration" type="text" name="duration" minlength="2" maxlength="7" value="" style="display:none;";
+            }
+            form #uploadForm {
+                // It's stupid how these can't be styled so they're just hidden here...
+                input id="fileInput" type="file" name="fileUpload"
+                    onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
+                input id="fileDuration" type="text" name="duration" minlength="2"
+                    maxlength="7" value=(settings.duration.default) style="display:none;";
+            }
+            button.main_file_upload onclick="document.getElementById('fileInput').click()" {
+                h4 { "Upload File" }
+                p { "Click or Drag and Drop" }
+            }
+            hr;
+
+            h3 { "Uploaded Files" }
+            div #uploadedFilesDisplay {
+                div { p {"File Name Here"} span {" "} div {p {"File Link Here"} button {"copy"}} }
             }
 
-            div class="progress_box" {
-                progress id="uploadProgress" value="0" max="100" {}
-                p id="uploadProgressValue" class="progress_value" { "" }
-            }
-
-            div id="uploadedFilesDisplay" {
-                h2 { "Uploaded Files" }
+            hr;
+            footer {
+                p {a href="https://github.com/G2-Games/confetti-box" {"Source"}}
+                p {a href="https://g2games.dev/" {"My Website"}}
+                p {a href="#" {"Links"}}
+                p {a href="#" {"Go"}}
+                p {a href="#" {"Here"}}
             }
         }
     }
@@ -97,6 +118,14 @@ async fn handle_upload(
             return Ok(Json(ClientResponse {
                 status: false,
                 response: "Duration larger than maximum",
+                ..Default::default()
+            }))
+        }
+
+        if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
+            return Ok(Json(ClientResponse {
+                status: false,
+                response: "Duration is disallowed",
                 ..Default::default()
             }))
         }
@@ -247,7 +276,7 @@ async fn main() {
     let rocket = rocket::build()
         .mount(
             config.server.root_path.clone() + "/",
-            routes![home, handle_upload, form_handler_js, stylesheet, server_info]
+            routes![home, handle_upload, form_handler_js, stylesheet, server_info, favicon]
         )
         .mount(
             config.server.root_path.clone() + "/files",
