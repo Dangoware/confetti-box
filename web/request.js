@@ -62,7 +62,9 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
     let button = linkRow.appendChild(document.createElement("button"));
     button.textContent = "📝";
     button.addEventListener('click', function(e) {
-        navigator.clipboard.writeText("https://" + window.location.host + "/" + linkAddress)
+        navigator.clipboard.writeText(
+            encodeURI("https://" + window.location.host + "/" + linkAddress)
+        )
     })
 
     progressBar.style.display = "none";
