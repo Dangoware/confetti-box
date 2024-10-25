@@ -8,7 +8,7 @@ use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
 use log::info;
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio::{self, fs::File, io::AsyncReadExt}, Config, FromForm, State
+    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::{ContentType, RawStr}, post, response::{content::{RawCss, RawJavaScript}, status::NotFound, Redirect}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
@@ -155,14 +155,13 @@ async fn handle_upload(
 
     let filename = get_id(
         raw_name,
-        hash.0
+        hash
     );
     out_path.push(filename.clone());
 
     let constructed_file = MochiFile::new_with_expiry(
         raw_name,
-        hash.1,
-        hash.0,
+        hash,
         out_path.clone(),
         expire_time
     );
@@ -175,8 +174,8 @@ async fn handle_upload(
             status: true,
             response: "File already exists",
             name: constructed_file.name().clone(),
-            url: "files/".to_string() + &filename,
-            hash: hash.0.to_hex()[0..10].to_string(),
+            url: filename,
+            hash: hash.to_hex()[0..10].to_string(),
             expires: Some(constructed_file.get_expiry()),
             ..Default::default()
         }))
@@ -191,8 +190,8 @@ async fn handle_upload(
     Ok(Json(ClientResponse {
         status: true,
         name: constructed_file.name().clone(),
-        url: "files/".to_string() + &filename,
-        hash: hash.0.to_hex()[0..10].to_string(),
+        url: filename,
+        hash: hash.to_hex()[0..10].to_string(),
         expires: Some(constructed_file.get_expiry()),
         ..Default::default()
     }))
@@ -207,11 +206,11 @@ struct ClientResponse {
 
     pub response: &'static str,
 
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "str::is_empty")]
     pub name: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "str::is_empty")]
     pub url: String,
-    #[serde(skip_serializing_if = "String::is_empty")]
+    #[serde(skip_serializing_if = "str::is_empty")]
     pub hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<DateTime<Utc>>,
@@ -223,20 +222,11 @@ fn get_id(name: &str, hash: Hash) -> String {
 }
 
 /// Get the Blake3 hash of a file, without reading it all into memory, and also get the size
-async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<(Hash, usize), std::io::Error> {
-    let mut file = File::open(input).await?;
-    let mut buf = vec![0; 5000000];
+async fn hash_file<P: AsRef<Path>>(input: &P) -> Result<Hash, std::io::Error> {
     let mut hasher = blake3::Hasher::new();
+    hasher.update_mmap_rayon(input)?;
 
-    let mut total = 0;
-    let mut bytes_read = None;
-    while bytes_read != Some(0) {
-        bytes_read = Some(file.read(&mut buf).await?);
-        total += bytes_read.unwrap();
-        hasher.update(&buf[..bytes_read.unwrap()]);
-    }
-
-    Ok((hasher.finalize(), total))
+    Ok(hasher.finalize())
 }
 
 /// An endpoint to obtain information about the server's capabilities

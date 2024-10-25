@@ -57,9 +57,6 @@ pub struct MochiFile {
     /// The original name of the file
     name: String,
 
-    /// Size of the file in bytes
-    size: usize,
-
     /// The location on disk (for deletion and management)
     filename: PathBuf,
 
@@ -80,7 +77,6 @@ impl MochiFile {
     /// Create a new file that expires in `expiry`.
     pub fn new_with_expiry(
         name: &str,
-        size: usize,
         hash: Hash,
         filename: PathBuf,
         expire_duration: TimeDelta
@@ -90,7 +86,6 @@ impl MochiFile {
 
         Self {
             name: name.to_string(),
-            size,
             filename,
             hash,
             upload_datetime: current,

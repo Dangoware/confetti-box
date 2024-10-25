@@ -57,7 +57,7 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
     progressText.textContent = "";
     const link = progressText.appendChild(document.createElement("a"));
     link.textContent = hash;
-    link.href = linkAddress;
+    link.href = "/files/" + linkAddress;
     link.target = "_blank";
 
     let button = linkRow.appendChild(document.createElement("button"));
@@ -68,7 +68,7 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
             clearTimeout(buttonTimeout)
         }
         navigator.clipboard.writeText(
-            encodeURI(window.location.protocol + "//" + window.location.host + "/" + linkAddress)
+            encodeURI(window.location.protocol + "//" + window.location.host + "/files/" + linkAddress)
         )
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
