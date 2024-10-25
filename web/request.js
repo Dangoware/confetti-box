@@ -4,7 +4,7 @@ const ERROR_TEXT = "Error!";
 
 async function formSubmit() {
     const form = document.getElementById("uploadForm");
-    const files = form.elements["fileUpload"].value;
+    const files = form.elements["fileUpload"].files;
     const duration = form.elements["duration"].value;
     const maxSize = form.elements["fileUpload"].dataset.maxFilesize;
 
