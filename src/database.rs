@@ -1,19 +1,26 @@
-use std::{collections::HashMap, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
+};
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
-use chrono::{DateTime, TimeDelta, Utc};
 use blake3::Hash;
+use chrono::{DateTime, TimeDelta, Utc};
 use log::{info, warn};
-use rocket::{serde::{Deserialize, Serialize}, tokio::{select, sync::mpsc::Receiver, time}};
+use rocket::{
+    serde::{Deserialize, Serialize},
+    tokio::{select, sync::mpsc::Receiver, time},
+};
 
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
-#[derive(Debug, Clone)]
-#[derive(Decode, Encode)]
+#[derive(Debug, Clone, Decode, Encode)]
 pub struct Database {
     path: PathBuf,
     #[bincode(with_serde)]
-    pub files: HashMap<MochiKey, MochiFile>
+    pub files: HashMap<MochiKey, MochiFile>,
 }
 
 impl Database {
@@ -22,7 +29,7 @@ impl Database {
 
         let output = Self {
             path: path.as_ref().to_path_buf(),
-            files: HashMap::new()
+            files: HashMap::new(),
         };
 
         encode_into_std_write(&output, &mut file, BINCODE_CFG).expect("Could not write database!");
@@ -49,9 +56,7 @@ impl Database {
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Decode, Encode)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, Decode, Encode, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct MochiFile {
     /// The original name of the file
@@ -79,7 +84,7 @@ impl MochiFile {
         name: &str,
         hash: Hash,
         filename: PathBuf,
-        expire_duration: TimeDelta
+        expire_duration: TimeDelta,
     ) -> Self {
         let current = Utc::now();
         let expiry = current + expire_duration;
@@ -104,7 +109,7 @@ impl MochiFile {
     pub fn get_key(&self) -> MochiKey {
         MochiKey {
             name: self.name.clone(),
-            hash: self.hash
+            hash: self.hash,
         }
     }
 
@@ -122,9 +127,7 @@ impl MochiFile {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[derive(Decode, Encode)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Decode, Encode, Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct MochiKey {
     name: String,
@@ -136,17 +139,21 @@ pub struct MochiKey {
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
 fn clean_database(db: &Arc<RwLock<Database>>) {
     let mut database = db.write().unwrap();
-    let files_to_remove: Vec<_> = database.files.iter().filter_map(|e| {
-        if e.1.expired() {
-            // Check if the entry has expired
-            Some((e.0.clone(), e.1.clone()))
-        } else if !e.1.path().try_exists().is_ok_and(|r| r) {
-            // Check if the entry exists
-            Some((e.0.clone(), e.1.clone()))
-        } else {
-            None
-        }
-    }).collect();
+    let files_to_remove: Vec<_> = database
+        .files
+        .iter()
+        .filter_map(|e| {
+            if e.1.expired() {
+                // Check if the entry has expired
+                Some((e.0.clone(), e.1.clone()))
+            } else if !e.1.path().try_exists().is_ok_and(|r| r) {
+                // Check if the entry exists
+                Some((e.0.clone(), e.1.clone()))
+            } else {
+                None
+            }
+        })
+        .collect();
 
     let mut expired = 0;
     let mut missing = 0;
@@ -166,7 +173,10 @@ fn clean_database(db: &Arc<RwLock<Database>>) {
         database.files.remove(&file.0);
     }
 
-    info!("{} expired and {} missing items cleared from database", expired, missing);
+    info!(
+        "{} expired and {} missing items cleared from database",
+        expired, missing
+    );
     database.save();
 }
 

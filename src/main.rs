@@ -1,23 +1,35 @@
 mod database;
-mod strings;
-mod settings;
 mod endpoints;
+mod settings;
+mod strings;
 mod utils;
 
-use std::{fs, sync::{Arc, RwLock}};
+use std::{
+    fs,
+    sync::{Arc, RwLock},
+};
 
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, MochiFile};
 use endpoints::{lookup, server_info};
 use log::info;
+use maud::{html, Markup, PreEscaped, DOCTYPE};
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
+    data::{Limits, ToByteUnit},
+    form::Form,
+    fs::{FileServer, Options, TempFile},
+    get,
+    http::ContentType,
+    post,
+    response::content::{RawCss, RawJavaScript},
+    routes,
+    serde::{json::Json, Serialize},
+    tokio, Config, FromForm, State,
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
 use utils::{get_id, hash_file};
 use uuid::Uuid;
-use maud::{html, Markup, DOCTYPE, PreEscaped};
 
 fn head(page_title: &str) -> Markup {
     html! {
@@ -119,20 +131,23 @@ async fn handle_upload(
 
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
         if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse::failure("Duration larger than maximum")))
+            return Ok(Json(ClientResponse::failure(
+                "Duration larger than maximum",
+            )));
         }
 
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
-            return Ok(Json(ClientResponse::failure("Duration not allowed")))
+            return Ok(Json(ClientResponse::failure("Duration not allowed")));
         }
 
         t
     } else {
-        return Ok(Json(ClientResponse::failure("Duration invalid")))
+        return Ok(Json(ClientResponse::failure("Duration invalid")));
     };
 
     // TODO: Properly sanitize this...
-    let raw_name = &*file_data.file
+    let raw_name = &*file_data
+        .file
         .raw_name()
         .unwrap()
         .dangerous_unsafe_unsanitized_raw()
@@ -145,21 +160,18 @@ async fn handle_upload(
     file_data.file.persist_to(&temp_filename).await?;
     let hash = hash_file(&temp_filename).await?;
 
-    let filename = get_id(
-        raw_name,
-        hash
-    );
+    let filename = get_id(raw_name, hash);
     out_path.push(filename.clone());
 
-    let constructed_file = MochiFile::new_with_expiry(
-        raw_name,
-        hash,
-        out_path.clone(),
-        expire_time
-    );
+    let constructed_file =
+        MochiFile::new_with_expiry(raw_name, hash, out_path.clone(), expire_time);
 
     if !settings.overwrite
-        && db.read().unwrap().files.contains_key(&constructed_file.get_key())
+        && db
+            .read()
+            .unwrap()
+            .files
+            .contains_key(&constructed_file.get_key())
     {
         info!("Key already in DB, NOT ADDING");
         return Ok(Json(ClientResponse {
@@ -169,14 +181,16 @@ async fn handle_upload(
             url: filename,
             hash: hash.to_hex()[0..10].to_string(),
             expires: Some(constructed_file.get_expiry()),
-            ..Default::default()
-        }))
+        }));
     }
 
     // Move it to the new proper place
     std::fs::rename(temp_filename, out_path)?;
 
-    db.write().unwrap().files.insert(constructed_file.get_key(), constructed_file.clone());
+    db.write()
+        .unwrap()
+        .files
+        .insert(constructed_file.get_key(), constructed_file.clone());
     db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
@@ -221,8 +235,7 @@ impl ClientResponse {
 #[rocket::main]
 async fn main() {
     // Get or create config file
-    let config = Settings::open(&"./settings.toml")
-        .expect("Could not open settings file");
+    let config = Settings::open(&"./settings.toml").expect("Could not open settings file");
 
     if !config.temp_dir.try_exists().is_ok_and(|e| e) {
         fs::create_dir_all(config.temp_dir.clone()).expect("Failed to create temp directory");
@@ -256,11 +269,22 @@ async fn main() {
     let rocket = rocket::build()
         .mount(
             config.server.root_path.clone() + "/",
-            routes![home, handle_upload, form_handler_js, stylesheet, server_info, favicon, lookup]
+            routes![
+                home,
+                handle_upload,
+                form_handler_js,
+                stylesheet,
+                server_info,
+                favicon,
+                lookup
+            ],
         )
         .mount(
             config.server.root_path.clone() + "/files",
-            FileServer::new(config.file_dir.clone(), Options::Missing | Options::NormalizeDirs)
+            FileServer::new(
+                config.file_dir.clone(),
+                Options::Missing | Options::NormalizeDirs,
+            ),
         )
         .manage(database)
         .manage(config)
@@ -272,7 +296,10 @@ async fn main() {
     rocket.expect("Server failed to shutdown gracefully");
 
     info!("Stopping database cleaning thread");
-    shutdown.send(()).await.expect("Failed to stop cleaner thread");
+    shutdown
+        .send(())
+        .await
+        .expect("Failed to stop cleaner thread");
 
     info!("Saving database on shutdown...");
     local_db.write().unwrap().save();

@@ -1,9 +1,13 @@
-use std::{fs::{self, File}, io::{self, Read, Write}, path::{Path, PathBuf}};
+use std::{
+    fs::{self, File},
+    io::{self, Read, Write},
+    path::{Path, PathBuf},
+};
 
 use chrono::TimeDelta;
-use serde_with::serde_as;
-use rocket::serde::{Deserialize, Serialize};
 use rocket::data::ToByteUnit;
+use rocket::serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
 /// A response to the client from the server
 #[derive(Deserialize, Serialize, Debug)]
@@ -44,7 +48,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            max_filesize: 1.megabytes().into(),  // 128 MB
+            max_filesize: 1.megabytes().into(), // 128 MB
             overwrite: true,
             duration: DurationSettings::default(),
             server: ServerSettings::default(),
@@ -103,7 +107,7 @@ impl Default for ServerSettings {
         Self {
             address: "127.0.0.1".into(),
             root_path: "/".into(),
-            port: 8950
+            port: 8950,
         }
     }
 }
@@ -134,8 +138,8 @@ pub struct DurationSettings {
 impl Default for DurationSettings {
     fn default() -> Self {
         Self {
-            maximum: TimeDelta::days(3),   // 72 hours
-            default: TimeDelta::hours(6),    // 6 hours
+            maximum: TimeDelta::days(3),  // 72 hours
+            default: TimeDelta::hours(6), // 6 hours
             // 1 hour, 6 hours, 24 hours, and 48 hours
             allowed: vec![
                 TimeDelta::hours(1),

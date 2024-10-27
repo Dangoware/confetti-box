@@ -1,5 +1,5 @@
-use std::path::Path;
 use blake3::Hash;
+use std::path::Path;
 
 /// Get a filename based on the file's hashed name
 pub fn get_id(name: &str, hash: Hash) -> String {
