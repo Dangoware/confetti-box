@@ -11,7 +11,7 @@ use std::{
 
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, Mmid, MochiFile};
-use endpoints::{lookup, server_info};
+use endpoints::{lookup, lookup_filename, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 use rocket::{
@@ -264,7 +264,8 @@ async fn main() {
                 stylesheet,
                 server_info,
                 favicon,
-                lookup
+                lookup,
+                lookup_filename,
             ],
         )
         .mount(

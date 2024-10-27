@@ -59,3 +59,36 @@ pub async fn lookup(
         file
     ))
 }
+
+
+#[get("/f/<mmid>/<filename>")]
+pub async fn lookup_filename(
+    db: &State<Arc<RwLock<Database>>>,
+    settings: &State<Settings>,
+    mmid: &str,
+    filename: &str,
+) -> Option<(ContentType, NamedFile)> {
+    let mmid: Mmid = match mmid.try_into() {
+        Ok(v) => v,
+        Err(_) => return None,
+    };
+
+    let entry = if let Some(e) = db.read().unwrap().get(&mmid).cloned() {
+        e
+    } else {
+        return None
+    };
+
+    dbg!(entry.name());
+    dbg!(filename);
+    if entry.name() != filename {
+        return None
+    }
+
+    let file = NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
+
+    Some((
+        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        file
+    ))
+}

@@ -88,22 +88,24 @@ function makeErrored(progressBar, progressText, linkRow, errorMessage) {
     linkRow.style.background = "#ffb2ae";
 }
 
-function makeFinished(progressBar, progressText, linkRow, MMID, _hash) {
+function makeFinished(progressBar, progressText, linkRow, response) {
     progressText.textContent = "";
+    const name = encodeURIComponent(response.name);
     const link = progressText.appendChild(document.createElement("a"));
-    link.textContent = MMID;
-    link.href = "/f/" + MMID;
+    link.textContent = response.mmid;
+    link.href = "/f/" + response.mmid;
     link.target = "_blank";
 
     let button = linkRow.appendChild(document.createElement("button"));
     button.textContent = "📝";
     let buttonTimeout = null;
     button.addEventListener('click', function(_e) {
+        const mmid = response.mmid;
         if (buttonTimeout) {
             clearTimeout(buttonTimeout)
         }
         navigator.clipboard.writeText(
-            encodeURI(window.location.protocol + "//" + window.location.host + "/f/" + MMID)
+                window.location.protocol + "//" + window.location.host + "/f/" + mmid
         )
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
@@ -141,7 +143,7 @@ function uploadComplete(response, progressBar, progressText, linkRow) {
 
         if (response.status) {
             console.log("Successfully uploaded file", response);
-            makeFinished(progressBar, progressText, linkRow, response.mmid, response.hash);
+            makeFinished(progressBar, progressText, linkRow, response);
         } else {
             console.error("Error uploading", response);
             makeErrored(progressBar, progressText, linkRow, response.response);
