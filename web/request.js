@@ -90,11 +90,11 @@ function makeErrored(progressBar, progressText, linkRow, errorMessage) {
     linkRow.style.background = "#ffb2ae";
 }
 
-function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
+function makeFinished(progressBar, progressText, linkRow, MMID, _hash) {
     progressText.textContent = "";
     const link = progressText.appendChild(document.createElement("a"));
-    link.textContent = hash;
-    link.href = "/files/" + linkAddress;
+    link.textContent = MMID;
+    link.href = "/f/" + MMID;
     link.target = "_blank";
 
     let button = linkRow.appendChild(document.createElement("button"));
@@ -105,7 +105,7 @@ function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
             clearTimeout(buttonTimeout)
         }
         navigator.clipboard.writeText(
-            encodeURI(window.location.protocol + "//" + window.location.host + "/files/" + linkAddress)
+            encodeURI(window.location.protocol + "//" + window.location.host + "/f/" + MMID)
         )
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
@@ -143,7 +143,7 @@ function uploadComplete(response, progressBar, progressText, linkRow) {
 
         if (response.status) {
             console.log("Successfully uploaded file", response);
-            makeFinished(progressBar, progressText, linkRow, response.url, response.hash);
+            makeFinished(progressBar, progressText, linkRow, response.mmid, response.hash);
         } else {
             console.error("Error uploading", response);
             makeErrored(progressBar, progressText, linkRow, response.response);
@@ -179,6 +179,8 @@ async function initEverything() {
             if (this.classList.contains("selected")) {
                 return
             }
+            document.getElementById("uploadForm").elements["duration"].value
+                = this.dataset.durationSeconds + "s";
             let selected = this.parentNode.getElementsByClassName("selected");
             selected[0].classList.remove("selected");
             this.classList.add("selected");

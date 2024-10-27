@@ -3,6 +3,7 @@ mod endpoints;
 mod settings;
 mod strings;
 mod utils;
+mod file_server;
 
 use std::{
     fs,
@@ -10,7 +11,7 @@ use std::{
 };
 
 use chrono::{DateTime, TimeDelta, Utc};
-use database::{clean_loop, Database, MochiFile};
+use database::{clean_loop, Database, Mmid, MochiFile};
 use endpoints::{lookup, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
@@ -28,7 +29,7 @@ use rocket::{
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
-use utils::{get_id, hash_file};
+use utils::hash_file;
 use uuid::Uuid;
 
 fn head(page_title: &str) -> Markup {
@@ -86,9 +87,9 @@ fn home(settings: &State<Settings>) -> Markup {
             }
             form #uploadForm {
                 // It's stupid how these can't be styled so they're just hidden here...
-                input id="fileInput" type="file" name="fileUpload" multiple
+                input #fileInput type="file" name="fileUpload" multiple
                     onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
-                input id="fileDuration" type="text" name="duration" minlength="2"
+                input #fileDuration type="text" name="duration" minlength="2"
                     maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
             }
             hr;
@@ -130,14 +131,12 @@ async fn handle_upload(
     let mut out_path = settings.file_dir.clone();
 
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
-        if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse::failure(
-                "Duration larger than maximum",
-            )));
-        }
-
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
             return Ok(Json(ClientResponse::failure("Duration not allowed")));
+        }
+
+        if t > settings.duration.maximum {
+            return Ok(Json(ClientResponse::failure("Duration larger than max")));
         }
 
         t
@@ -146,7 +145,7 @@ async fn handle_upload(
     };
 
     // TODO: Properly sanitize this...
-    let raw_name = &*file_data
+    let raw_name = file_data
         .file
         .raw_name()
         .unwrap()
@@ -158,47 +157,28 @@ async fn handle_upload(
     temp_dir.push(Uuid::new_v4().to_string());
     let temp_filename = temp_dir;
     file_data.file.persist_to(&temp_filename).await?;
-    let hash = hash_file(&temp_filename).await?;
+    let file_hash = hash_file(&temp_filename).await?;
 
-    let filename = get_id(raw_name, hash);
-    out_path.push(filename.clone());
+    let file_mmid = Mmid::new();
+    out_path.push(file_hash.to_string());
 
     let constructed_file =
-        MochiFile::new_with_expiry(raw_name, hash, out_path.clone(), expire_time);
-
-    if !settings.overwrite
-        && db
-            .read()
-            .unwrap()
-            .files
-            .contains_key(&constructed_file.get_key())
-    {
-        info!("Key already in DB, NOT ADDING");
-        return Ok(Json(ClientResponse {
-            status: true,
-            response: "File already exists",
-            name: constructed_file.name().clone(),
-            url: filename,
-            hash: hash.to_hex()[0..10].to_string(),
-            expires: Some(constructed_file.get_expiry()),
-        }));
-    }
+        MochiFile::new_with_expiry(file_mmid.clone(), raw_name, file_hash, expire_time);
 
     // Move it to the new proper place
     std::fs::rename(temp_filename, out_path)?;
 
     db.write()
         .unwrap()
-        .files
-        .insert(constructed_file.get_key(), constructed_file.clone());
+        .insert(constructed_file.clone());
     db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
         status: true,
         name: constructed_file.name().clone(),
-        url: filename,
-        hash: hash.to_hex()[0..10].to_string(),
-        expires: Some(constructed_file.get_expiry()),
+        mmid: Some(file_mmid),
+        hash: file_hash.to_hex()[0..10].to_string(),
+        expires: Some(constructed_file.expiry()),
         ..Default::default()
     }))
 }
@@ -214,8 +194,8 @@ struct ClientResponse {
 
     #[serde(skip_serializing_if = "str::is_empty")]
     pub name: String,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mmid: Option<Mmid>,
     #[serde(skip_serializing_if = "str::is_empty")]
     pub hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -263,7 +243,8 @@ async fn main() {
     let (shutdown, rx) = tokio::sync::mpsc::channel(1);
     tokio::spawn({
         let cleaner_db = database.clone();
-        async move { clean_loop(cleaner_db, rx, TimeDelta::minutes(2)).await }
+        let file_path = config.file_dir.clone();
+        async move { clean_loop(cleaner_db, file_path, rx,  TimeDelta::seconds(10)).await }
     });
 
     let rocket = rocket::build()

@@ -9,6 +9,7 @@ blake3 = { version = "1.5.4", features = ["mmap", "rayon", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 log = "0.4"
 maud = { version = "0.26", features = ["rocket"] }
+rand = "0.8.5"
 rocket = { version = "0.5", features = ["json"] }
 serde = { version = "1.0.213", features = ["derive"] }
 serde_with = { version = "3.11.0", features = ["chrono_0_4"] }

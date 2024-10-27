@@ -1,15 +1,11 @@
 use std::sync::{Arc, RwLock};
 
 use rocket::{
-    get,
-    http::RawStr,
-    response::{status::NotFound, Redirect},
-    serde::{self, json::Json},
-    State,
+    fs::NamedFile, get, serde::{self, json::Json}, State
 };
 use serde::Serialize;
 
-use crate::{database::Database, get_id, settings::Settings};
+use crate::{database::Database, settings::Settings};
 
 /// An endpoint to obtain information about the server's capabilities
 #[get("/info")]
@@ -41,14 +37,17 @@ pub struct ServerInfo {
 /// Look up the hash of a file to find it. This only returns the first
 /// hit for a hash, so different filenames may not be found.
 #[get("/f/<id>")]
-pub fn lookup(db: &State<Arc<RwLock<Database>>>, id: &str) -> Result<Redirect, NotFound<()>> {
-    for file in db.read().unwrap().files.values() {
-        if file.hash().to_hex()[0..10].to_string() == id {
-            let filename = get_id(file.name(), *file.hash());
-            let filename = RawStr::new(&filename).percent_encode().to_string();
-            return Ok(Redirect::to(format!("/files/{}", filename)));
-        }
-    }
+pub async fn lookup(
+    db: &State<Arc<RwLock<Database>>>,
+    settings: &State<Settings>,
+    id: &str
+) -> Option<NamedFile> {
+    dbg!(db.read().unwrap());
+    let entry = if let Some(e) = db.read().unwrap().get(&id.into()).cloned() {
+        e
+    } else {
+        return None
+    };
 
-    Err(NotFound(()))
+    NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()
 }
