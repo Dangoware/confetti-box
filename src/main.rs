@@ -119,28 +119,16 @@ async fn handle_upload(
 
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
         if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse {
-                status: false,
-                response: "Duration larger than maximum",
-                ..Default::default()
-            }))
+            return Ok(Json(ClientResponse::failure("Duration larger than maximum")))
         }
 
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
-            return Ok(Json(ClientResponse {
-                status: false,
-                response: "Duration is disallowed",
-                ..Default::default()
-            }))
+            return Ok(Json(ClientResponse::failure("Duration not allowed")))
         }
 
         t
     } else {
-        return Ok(Json(ClientResponse {
-            status: false,
-            response: "Invalid duration",
-            ..Default::default()
-        }))
+        return Ok(Json(ClientResponse::failure("Duration invalid")))
     };
 
     // TODO: Properly sanitize this...
@@ -218,6 +206,16 @@ struct ClientResponse {
     pub hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires: Option<DateTime<Utc>>,
+}
+
+impl ClientResponse {
+    fn failure(response: &'static str) -> Self {
+        Self {
+            status: false,
+            response,
+            ..Default::default()
+        }
+    }
 }
 
 #[rocket::main]
