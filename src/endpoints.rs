@@ -2,14 +2,18 @@ use std::sync::{Arc, RwLock};
 
 use rocket::{
     get,
-    http::RawStr,
-    response::{status::NotFound, Redirect},
+    http::ContentType,
+    response::Redirect,
     serde::{self, json::Json},
-    State,
+    tokio::fs::File,
+    uri, State,
 };
 use serde::Serialize;
 
-use crate::{database::Database, get_id, settings::Settings};
+use crate::{
+    database::{Database, Mmid},
+    settings::Settings,
+};
 
 /// An endpoint to obtain information about the server's capabilities
 #[get("/info")]
@@ -38,17 +42,41 @@ pub struct ServerInfo {
     allowed_durations: Vec<u32>,
 }
 
-/// Look up the hash of a file to find it. This only returns the first
-/// hit for a hash, so different filenames may not be found.
-#[get("/f/<id>")]
-pub fn lookup(db: &State<Arc<RwLock<Database>>>, id: &str) -> Result<Redirect, NotFound<()>> {
-    for file in db.read().unwrap().files.values() {
-        if file.hash().to_hex()[0..10].to_string() == id {
-            let filename = get_id(file.name(), *file.hash());
-            let filename = RawStr::new(&filename).percent_encode().to_string();
-            return Ok(Redirect::to(format!("/files/{}", filename)));
-        }
+/// Look up the [`Mmid`] of a file to find it.
+#[get("/f/<mmid>")]
+pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Option<Redirect> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
+
+    Some(Redirect::to(uri!(lookup_mmid_name(
+        mmid.to_string(),
+        entry.name()
+    ))))
+}
+
+/// Look up the [`Mmid`] of a file to find it.
+#[get("/f/<mmid>/<name>")]
+pub async fn lookup_mmid_name(
+    db: &State<Arc<RwLock<Database>>>,
+    settings: &State<Settings>,
+    mmid: &str,
+    name: &str,
+) -> Option<(ContentType, File)> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
+
+    // If the name does not match, then this is invalid
+    if name != entry.name() {
+        return None;
     }
 
-    Err(NotFound(()))
+    let file = File::open(settings.file_dir.join(entry.hash().to_string()))
+        .await
+        .ok()?;
+
+    Some((
+        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        file,
+    ))
 }

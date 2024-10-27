@@ -10,8 +10,8 @@ use std::{
 };
 
 use chrono::{DateTime, TimeDelta, Utc};
-use database::{clean_loop, Database, MochiFile};
-use endpoints::{lookup, server_info};
+use database::{clean_loop, Database, Mmid, MochiFile};
+use endpoints::{lookup_mmid, lookup_mmid_name, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 use rocket::{
@@ -28,7 +28,7 @@ use rocket::{
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
-use utils::{get_id, hash_file};
+use utils::hash_file;
 use uuid::Uuid;
 
 fn head(page_title: &str) -> Markup {
@@ -86,9 +86,9 @@ fn home(settings: &State<Settings>) -> Markup {
             }
             form #uploadForm {
                 // It's stupid how these can't be styled so they're just hidden here...
-                input id="fileInput" type="file" name="fileUpload" multiple
+                input #fileInput type="file" name="fileUpload" multiple
                     onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
-                input id="fileDuration" type="text" name="duration" minlength="2"
+                input #fileDuration type="text" name="duration" minlength="2"
                     maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
             }
             hr;
@@ -102,7 +102,7 @@ fn home(settings: &State<Settings>) -> Markup {
             footer {
                 p {a href="https://github.com/G2-Games/confetti-box" {"Source"}}
                 p {a href="https://g2games.dev/" {"My Website"}}
-                p {a href="#" {"Links"}}
+                p {a href="api" {"API Info"}}
                 p {a href="#" {"Go"}}
                 p {a href="#" {"Here"}}
             }
@@ -126,18 +126,14 @@ async fn handle_upload(
     db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
 ) -> Result<Json<ClientResponse>, std::io::Error> {
-    let mut temp_dir = settings.temp_dir.clone();
-    let mut out_path = settings.file_dir.clone();
-
+    // Ensure the expiry time is valid, if not return an error
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
-        if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse::failure(
-                "Duration larger than maximum",
-            )));
-        }
-
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
             return Ok(Json(ClientResponse::failure("Duration not allowed")));
+        }
+
+        if t > settings.duration.maximum {
+            return Ok(Json(ClientResponse::failure("Duration larger than max")));
         }
 
         t
@@ -145,8 +141,7 @@ async fn handle_upload(
         return Ok(Json(ClientResponse::failure("Duration invalid")));
     };
 
-    // TODO: Properly sanitize this...
-    let raw_name = &*file_data
+    let raw_name = file_data
         .file
         .raw_name()
         .unwrap()
@@ -154,51 +149,37 @@ async fn handle_upload(
         .as_str()
         .to_string();
 
-    // Get temp path and hash it
-    temp_dir.push(Uuid::new_v4().to_string());
-    let temp_filename = temp_dir;
+    // Get temp path for the file
+    let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
     file_data.file.persist_to(&temp_filename).await?;
-    let hash = hash_file(&temp_filename).await?;
 
-    let filename = get_id(raw_name, hash);
-    out_path.push(filename.clone());
+    // Get hash and random identifier
+    let file_mmid = Mmid::new();
+    let file_hash = hash_file(&temp_filename).await?;
 
-    let constructed_file =
-        MochiFile::new_with_expiry(raw_name, hash, out_path.clone(), expire_time);
+    // Process filetype
+    let file_type = file_format::FileFormat::from_file(&temp_filename)?;
 
-    if !settings.overwrite
-        && db
-            .read()
-            .unwrap()
-            .files
-            .contains_key(&constructed_file.get_key())
-    {
-        info!("Key already in DB, NOT ADDING");
-        return Ok(Json(ClientResponse {
-            status: true,
-            response: "File already exists",
-            name: constructed_file.name().clone(),
-            url: filename,
-            hash: hash.to_hex()[0..10].to_string(),
-            expires: Some(constructed_file.get_expiry()),
-        }));
-    }
+    let constructed_file = MochiFile::new_with_expiry(
+        file_mmid.clone(),
+        raw_name,
+        file_type.extension(),
+        file_hash,
+        expire_time,
+    );
 
     // Move it to the new proper place
-    std::fs::rename(temp_filename, out_path)?;
+    std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
 
-    db.write()
-        .unwrap()
-        .files
-        .insert(constructed_file.get_key(), constructed_file.clone());
+    db.write().unwrap().insert(constructed_file.clone());
     db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
         status: true,
         name: constructed_file.name().clone(),
-        url: filename,
-        hash: hash.to_hex()[0..10].to_string(),
-        expires: Some(constructed_file.get_expiry()),
+        mmid: Some(file_mmid),
+        hash: file_hash.to_string(),
+        expires: Some(constructed_file.expiry()),
         ..Default::default()
     }))
 }
@@ -214,8 +195,8 @@ struct ClientResponse {
 
     #[serde(skip_serializing_if = "str::is_empty")]
     pub name: String,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mmid: Option<Mmid>,
     #[serde(skip_serializing_if = "str::is_empty")]
     pub hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -263,7 +244,8 @@ async fn main() {
     let (shutdown, rx) = tokio::sync::mpsc::channel(1);
     tokio::spawn({
         let cleaner_db = database.clone();
-        async move { clean_loop(cleaner_db, rx, TimeDelta::minutes(2)).await }
+        let file_path = config.file_dir.clone();
+        async move { clean_loop(cleaner_db, file_path, rx, TimeDelta::minutes(2)).await }
     });
 
     let rocket = rocket::build()
@@ -276,7 +258,8 @@ async fn main() {
                 stylesheet,
                 server_info,
                 favicon,
-                lookup
+                lookup_mmid,
+                lookup_mmid_name,
             ],
         )
         .mount(
@@ -295,12 +278,14 @@ async fn main() {
     // Ensure the server gracefully shuts down
     rocket.expect("Server failed to shutdown gracefully");
 
-    info!("Stopping database cleaning thread");
+    info!("Stopping database cleaning thread...");
     shutdown
         .send(())
         .await
-        .expect("Failed to stop cleaner thread");
+        .expect("Failed to stop cleaner thread.");
+    info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
     local_db.write().unwrap().save();
+    info!("Saving database completed successfully.");
 }

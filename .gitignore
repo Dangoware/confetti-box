@@ -4,3 +4,5 @@
 temp_files
 *.mochi
 settings.toml
+
+Cargo.lock

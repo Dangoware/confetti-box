@@ -42,13 +42,11 @@ function getDroppedFiles(evt) {
         });
     }
 
-    console.log(files);
     return files;
 }
 
 async function fileSend(files, duration, maxSize) {
     for (const file of files) {
-        console.log(file);
         const [linkRow, progressBar, progressText] = addNewToList(file.name);
         if (file.size > maxSize) {
             makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
@@ -90,22 +88,24 @@ function makeErrored(progressBar, progressText, linkRow, errorMessage) {
     linkRow.style.background = "#ffb2ae";
 }
 
-function makeFinished(progressBar, progressText, linkRow, linkAddress, hash) {
+function makeFinished(progressBar, progressText, linkRow, response) {
     progressText.textContent = "";
+    const name = encodeURIComponent(response.name);
     const link = progressText.appendChild(document.createElement("a"));
-    link.textContent = hash;
-    link.href = "/files/" + linkAddress;
+    link.textContent = response.mmid;
+    link.href = "/f/" + response.mmid;
     link.target = "_blank";
 
     let button = linkRow.appendChild(document.createElement("button"));
     button.textContent = "📝";
     let buttonTimeout = null;
     button.addEventListener('click', function(_e) {
+        const mmid = response.mmid;
         if (buttonTimeout) {
             clearTimeout(buttonTimeout)
         }
         navigator.clipboard.writeText(
-            encodeURI(window.location.protocol + "//" + window.location.host + "/files/" + linkAddress)
+                window.location.protocol + "//" + window.location.host + "/f/" + mmid
         )
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
@@ -143,7 +143,7 @@ function uploadComplete(response, progressBar, progressText, linkRow) {
 
         if (response.status) {
             console.log("Successfully uploaded file", response);
-            makeFinished(progressBar, progressText, linkRow, response.url, response.hash);
+            makeFinished(progressBar, progressText, linkRow, response);
         } else {
             console.error("Error uploading", response);
             makeErrored(progressBar, progressText, linkRow, response.response);
@@ -179,6 +179,8 @@ async function initEverything() {
             if (this.classList.contains("selected")) {
                 return
             }
+            document.getElementById("uploadForm").elements["duration"].value
+                = this.dataset.durationSeconds + "s";
             let selected = this.parentNode.getElementsByClassName("selected");
             selected[0].classList.remove("selected");
             this.classList.add("selected");
