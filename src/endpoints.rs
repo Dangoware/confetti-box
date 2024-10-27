@@ -1,11 +1,19 @@
-use std::{path::PathBuf, sync::{Arc, RwLock}};
+use std::sync::{Arc, RwLock};
 
 use rocket::{
-    get, http::ContentType, response::Redirect, serde::{self, json::Json}, tokio::fs::File, uri, State
+    get,
+    http::ContentType,
+    response::Redirect,
+    serde::{self, json::Json},
+    tokio::fs::File,
+    uri, State,
 };
 use serde::Serialize;
 
-use crate::{database::{Database, Mmid}, settings::Settings};
+use crate::{
+    database::{Database, Mmid},
+    settings::Settings,
+};
 
 /// An endpoint to obtain information about the server's capabilities
 #[get("/info")]
@@ -36,16 +44,14 @@ pub struct ServerInfo {
 
 /// Look up the [`Mmid`] of a file to find it.
 #[get("/f/<mmid>")]
-pub async fn lookup_mmid(
-    db: &State<Arc<RwLock<Database>>>,
-    mmid: &str,
-) -> Option<Redirect> {
+pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Option<Redirect> {
     let mmid: Mmid = mmid.try_into().ok()?;
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
-    Some(
-        Redirect::to(uri!(lookup_mmid_name(mmid.to_string(), entry.name())))
-    )
+    Some(Redirect::to(uri!(lookup_mmid_name(
+        mmid.to_string(),
+        entry.name()
+    ))))
 }
 
 /// Look up the [`Mmid`] of a file to find it.
@@ -62,13 +68,15 @@ pub async fn lookup_mmid_name(
 
     // If the name does not match, then this is invalid
     if name != entry.name() {
-        return None
+        return None;
     }
 
-    let file = File::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
+    let file = File::open(settings.file_dir.join(entry.hash().to_string()))
+        .await
+        .ok()?;
 
     Some((
         ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
-        file
+        file,
     ))
 }

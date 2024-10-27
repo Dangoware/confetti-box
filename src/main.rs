@@ -160,24 +160,18 @@ async fn handle_upload(
     // Process filetype
     let file_type = file_format::FileFormat::from_file(&temp_filename)?;
 
-    let constructed_file =
-        MochiFile::new_with_expiry(
-            file_mmid.clone(),
-            raw_name,
-            file_type.extension(),
-            file_hash,
-            expire_time
-        );
+    let constructed_file = MochiFile::new_with_expiry(
+        file_mmid.clone(),
+        raw_name,
+        file_type.extension(),
+        file_hash,
+        expire_time,
+    );
 
     // Move it to the new proper place
-    std::fs::rename(
-        temp_filename,
-        settings.file_dir.join(file_hash.to_string())
-    )?;
+    std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
 
-    db.write()
-        .unwrap()
-        .insert(constructed_file.clone());
+    db.write().unwrap().insert(constructed_file.clone());
     db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
@@ -251,7 +245,7 @@ async fn main() {
     tokio::spawn({
         let cleaner_db = database.clone();
         let file_path = config.file_dir.clone();
-        async move { clean_loop(cleaner_db, file_path, rx,  TimeDelta::minutes(2)).await }
+        async move { clean_loop(cleaner_db, file_path, rx, TimeDelta::minutes(2)).await }
     });
 
     let rocket = rocket::build()

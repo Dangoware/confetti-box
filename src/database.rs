@@ -1,19 +1,20 @@
 use std::{
-    collections::{hash_map::Values, HashMap, HashSet}, ffi::OsStr, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}
+    collections::{hash_map::Values, HashMap, HashSet},
+    ffi::OsStr,
+    fs::{self, File},
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
 };
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
-use file_format::FileFormat;
 use log::{info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     serde::{Deserialize, Serialize},
     tokio::{select, sync::mpsc::Receiver, time},
 };
-
-use crate::settings::Settings;
 
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
@@ -76,7 +77,8 @@ impl Database {
             }
         } else {
             // If the database does not contain the hash, create a new set for it
-            self.hashes.insert(entry.hash, HashSet::from([entry.mmid.clone()]));
+            self.hashes
+                .insert(entry.hash, HashSet::from([entry.mmid.clone()]));
         }
 
         self.entries.insert(entry.mmid.clone(), entry.clone());
@@ -88,11 +90,11 @@ impl Database {
     ///
     /// If the database did not contain this value, then `false` is returned.
     pub fn remove_mmid(&mut self, mmid: &Mmid) -> bool {
-        let hash = if let Some(h) = self.entries.get(mmid).and_then(|e| Some(e.hash)) {
+        let hash = if let Some(h) = self.entries.get(mmid).map(|e| e.hash) {
             self.entries.remove(mmid);
             h
         } else {
-            return false
+            return false;
         };
 
         if let Some(s) = self.hashes.get_mut(&hash) {
@@ -109,22 +111,18 @@ impl Database {
         if let Some(s) = self.hashes.get(hash) {
             if s.is_empty() {
                 self.hashes.remove(hash);
-                return Some(true)
+                Some(true)
             } else {
-                return Some(false)
+                Some(false)
             }
         } else {
-            return None
+            None
         }
     }
 
     /// Checks if a hash contained in the database contains no more [`Mmid`]s.
     pub fn is_hash_empty(&self, hash: &Hash) -> Option<bool> {
-        if let Some(s) = self.hashes.get(hash) {
-            Some(s.is_empty())
-        } else {
-            None
-        }
+        self.hashes.get(hash).map(|s| s.is_empty())
     }
 
     /// Get an entry by its [`Mmid`]. Returns [`None`] if the value does not exist.
@@ -213,10 +211,7 @@ impl MochiFile {
 
 /// Clean the database. Removes files which are past their expiry
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
-fn clean_database(
-    db: &Arc<RwLock<Database>>,
-    file_path: &PathBuf,
-) {
+fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
     let mut database = db.write().unwrap();
 
     // Add expired entries to the removal list
@@ -224,7 +219,7 @@ fn clean_database(
         .entries()
         .filter_map(|e| {
             if e.is_expired() {
-                Some((e.mmid().clone(), e.hash().clone()))
+                Some((e.mmid().clone(), *e.hash()))
             } else {
                 None
             }
@@ -234,7 +229,6 @@ fn clean_database(
     let mut removed_files = 0;
     let mut removed_entries = 0;
     for e in &files_to_remove {
-
         if database.remove_mmid(&e.0) {
             removed_entries += 1;
         }
@@ -272,8 +266,7 @@ pub async fn clean_loop(
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, Hash)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, Hash, Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
@@ -283,14 +276,6 @@ impl Mmid {
 
         Self(string)
     }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    pub fn to_string(&self) -> String {
-        self.0.to_owned()
-    }
 }
 
 impl TryFrom<&str> for Mmid {
@@ -298,11 +283,11 @@ impl TryFrom<&str> for Mmid {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() != 8 {
-            return Err(())
+            return Err(());
         }
 
         if value.chars().any(|c| !c.is_ascii_alphanumeric()) {
-            return Err(())
+            return Err(());
         }
 
         Ok(Self(value.to_owned()))
@@ -327,11 +312,11 @@ impl TryFrom<&OsStr> for Mmid {
         };
 
         if string.len() != 8 {
-            return Err(())
+            return Err(());
         }
 
         if string.chars().any(|c| !c.is_ascii_alphanumeric()) {
-            return Err(())
+            return Err(());
         }
 
         Ok(Self(string.to_owned()))
