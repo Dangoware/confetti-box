@@ -3,7 +3,6 @@ mod endpoints;
 mod settings;
 mod strings;
 mod utils;
-mod file_server;
 
 use std::{
     fs,
@@ -127,9 +126,7 @@ async fn handle_upload(
     db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
 ) -> Result<Json<ClientResponse>, std::io::Error> {
-    let mut temp_dir = settings.temp_dir.clone();
-    let mut out_path = settings.file_dir.clone();
-
+    // Ensure the expiry time is valid, if not return an error
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
             return Ok(Json(ClientResponse::failure("Duration not allowed")));
@@ -144,7 +141,6 @@ async fn handle_upload(
         return Ok(Json(ClientResponse::failure("Duration invalid")));
     };
 
-    // TODO: Properly sanitize this...
     let raw_name = file_data
         .file
         .raw_name()
@@ -153,20 +149,31 @@ async fn handle_upload(
         .as_str()
         .to_string();
 
-    // Get temp path and hash it
-    temp_dir.push(Uuid::new_v4().to_string());
-    let temp_filename = temp_dir;
+    // Get temp path for the file
+    let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
     file_data.file.persist_to(&temp_filename).await?;
+
+    // Get hash and random identifier
+    let file_mmid = Mmid::new();
     let file_hash = hash_file(&temp_filename).await?;
 
-    let file_mmid = Mmid::new();
-    out_path.push(file_hash.to_string());
+    // Process filetype
+    let file_type = file_format::FileFormat::from_file(&temp_filename)?;
 
     let constructed_file =
-        MochiFile::new_with_expiry(file_mmid.clone(), raw_name, file_hash, expire_time);
+        MochiFile::new_with_expiry(
+            file_mmid.clone(),
+            raw_name,
+            file_type.extension(),
+            file_hash,
+            expire_time
+        );
 
     // Move it to the new proper place
-    std::fs::rename(temp_filename, out_path)?;
+    std::fs::rename(
+        temp_filename,
+        settings.file_dir.join(file_hash.to_string())
+    )?;
 
     db.write()
         .unwrap()
@@ -177,7 +184,7 @@ async fn handle_upload(
         status: true,
         name: constructed_file.name().clone(),
         mmid: Some(file_mmid),
-        hash: file_hash.to_hex()[0..10].to_string(),
+        hash: file_hash.to_string(),
         expires: Some(constructed_file.expiry()),
         ..Default::default()
     }))
@@ -244,7 +251,7 @@ async fn main() {
     tokio::spawn({
         let cleaner_db = database.clone();
         let file_path = config.file_dir.clone();
-        async move { clean_loop(cleaner_db, file_path, rx,  TimeDelta::seconds(10)).await }
+        async move { clean_loop(cleaner_db, file_path, rx,  TimeDelta::minutes(2)).await }
     });
 
     let rocket = rocket::build()

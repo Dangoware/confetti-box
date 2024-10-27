@@ -5,6 +5,7 @@ use std::{
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
+use file_format::FileFormat;
 use log::{info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
@@ -146,6 +147,9 @@ pub struct MochiFile {
     /// The original name of the file
     name: String,
 
+    /// The format the file is, for serving
+    extension: String,
+
     /// The Blake3 hash of the file
     #[bincode(with_serde)]
     hash: Hash,
@@ -164,6 +168,7 @@ impl MochiFile {
     pub fn new_with_expiry(
         mmid: Mmid,
         name: String,
+        extension: &str,
         hash: Hash,
         expire_duration: TimeDelta,
     ) -> Self {
@@ -173,6 +178,7 @@ impl MochiFile {
         Self {
             mmid,
             name,
+            extension: extension.to_string(),
             hash,
             upload_datetime: current,
             expiry_datetime: expiry,
@@ -198,6 +204,10 @@ impl MochiFile {
 
     pub fn mmid(&self) -> &Mmid {
         &self.mmid
+    }
+
+    pub fn extension(&self) -> &String {
+        &self.extension
     }
 }
 
@@ -283,8 +293,18 @@ impl Mmid {
     }
 }
 
-impl From<&str> for Mmid {
-    fn from(value: &str) -> Self {
-        Self(value.to_owned())
+impl TryFrom<&str> for Mmid {
+    type Error = ();
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        if value.len() != 8 {
+            return Err(())
+        }
+
+        if value.chars().any(|c| !c.is_ascii_alphanumeric()) {
+            return Err(())
+        }
+
+        Ok(Self(value.to_owned()))
     }
 }

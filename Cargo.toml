@@ -7,6 +7,7 @@ edition = "2021"
 bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 blake3 = { version = "1.5.4", features = ["mmap", "rayon", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
+file-format = { version = "0.25.0", features = ["reader"] }
 log = "0.4"
 maud = { version = "0.26", features = ["rocket"] }
 rand = "0.8.5"

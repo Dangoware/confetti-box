@@ -1,11 +1,11 @@
 use std::sync::{Arc, RwLock};
 
 use rocket::{
-    fs::NamedFile, get, serde::{self, json::Json}, State
+    fs::NamedFile, get, http::ContentType, serde::{self, json::Json}, tokio::fs::File, State
 };
 use serde::Serialize;
 
-use crate::{database::Database, settings::Settings};
+use crate::{database::{Database, Mmid}, settings::Settings};
 
 /// An endpoint to obtain information about the server's capabilities
 #[get("/info")]
@@ -34,20 +34,28 @@ pub struct ServerInfo {
     allowed_durations: Vec<u32>,
 }
 
-/// Look up the hash of a file to find it. This only returns the first
-/// hit for a hash, so different filenames may not be found.
-#[get("/f/<id>")]
+/// Look up the [`Mmid`] of a file to find it.
+#[get("/f/<mmid>")]
 pub async fn lookup(
     db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
-    id: &str
-) -> Option<NamedFile> {
-    dbg!(db.read().unwrap());
-    let entry = if let Some(e) = db.read().unwrap().get(&id.into()).cloned() {
+    mmid: &str
+) -> Option<(ContentType, NamedFile)> {
+    let mmid: Mmid = match mmid.try_into() {
+        Ok(v) => v,
+        Err(_) => return None,
+    };
+
+    let entry = if let Some(e) = db.read().unwrap().get(&mmid).cloned() {
         e
     } else {
         return None
     };
 
-    NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()
+    let file = NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
+
+    Some((
+        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        file
+    ))
 }

@@ -42,13 +42,11 @@ function getDroppedFiles(evt) {
         });
     }
 
-    console.log(files);
     return files;
 }
 
 async function fileSend(files, duration, maxSize) {
     for (const file of files) {
-        console.log(file);
         const [linkRow, progressBar, progressText] = addNewToList(file.name);
         if (file.size > maxSize) {
             makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
