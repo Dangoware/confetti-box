@@ -1,26 +1,66 @@
-let statusNotifier;
-let uploadedFilesDisplay;
-let durationBox;
-
 const TOO_LARGE_TEXT = "Too large!";
+const ZERO_TEXT = "File is blank!";
 const ERROR_TEXT = "Error!";
 
-async function formSubmit(form) {
-    // Get file size and don't upload if it's too large
-    let file_upload = document.getElementById("fileInput");
+async function formSubmit() {
+    const form = document.getElementById("uploadForm");
+    const files = form.elements["fileUpload"].files;
+    const duration = form.elements["duration"].value;
+    const maxSize = form.elements["fileUpload"].dataset.maxFilesize;
 
-    for (const file of file_upload.files) {
-        let [linkRow, progressBar, progressText] = addNewToList(file.name);
-        if (file.size > file_upload.dataset.maxFilesize) {
+    await fileSend(files, duration, maxSize);
+
+    // Reset the form file data since we've successfully submitted it
+    form.elements["fileUpload"].value = "";
+}
+
+async function dragDropSubmit(evt) {
+    const form = document.getElementById("uploadForm");
+    const duration = form.elements["duration"].value;
+
+    const files = getDroppedFiles(evt);
+
+    await fileSend(files, duration);
+}
+
+function getDroppedFiles(evt) {
+    evt.preventDefault();
+
+    const files = [];
+    if (evt.dataTransfer.items) {
+        // Use DataTransferItemList interface to access the file(s)
+        [...evt.dataTransfer.items].forEach((item, _) => {
+            // If dropped items aren't files, reject them
+            if (item.kind === "file") {
+                files.push(item.getAsFile());
+            }
+        });
+    } else {
+        // Use DataTransfer interface to access the file(s)
+        [...evt.dataTransfer.files].forEach((file, _) => {
+            files.push(file.name);
+        });
+    }
+
+    console.log(files);
+    return files;
+}
+
+async function fileSend(files, duration, maxSize) {
+    for (const file of files) {
+        console.log(file);
+        const [linkRow, progressBar, progressText] = addNewToList(file.name);
+        if (file.size > maxSize) {
             makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
-            console.error(
-                "Provided file is too large", file.size, "bytes; max",
-                file_upload.dataset.maxFilesize, "bytes"
-            );
+            console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
+            continue
+        } else if (file.size == 0) {
+            makeErrored(progressBar, progressText, linkRow, ZERO_TEXT);
+            console.error("Provided file has 0 bytes");
             continue
         }
 
-        let request = new XMLHttpRequest();
+        const request = new XMLHttpRequest();
         request.open('POST', "./upload", true);
 
         // Set up event listeners
@@ -35,16 +75,13 @@ async function formSubmit(form) {
         try {
             const formData = new FormData();
             formData.append("fileUpload", file);
-            formData.append("duration", form.elements["duration"].value);
+            formData.append("duration", duration);
             request.send(formData);
         } catch (e) {
             makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
             console.error("An error occured while uploading", e);
         }
     }
-
-    // Reset the form file data since we've successfully submitted it
-    form.elements["fileUpload"].value = "";
 }
 
 function makeErrored(progressBar, progressText, linkRow, errorMessage) {
@@ -85,6 +122,19 @@ function networkErrorHandler(err, progressBar, progressText, linkRow) {
     console.error("A network error occured while uploading", err);
 }
 
+function uploadProgress(progress, progressBar, progressText, _linkRow) {
+    if (progress.lengthComputable) {
+        const progressPercent = Math.floor((progress.loaded / progress.total) * 100);
+        if (progressPercent == 100) {
+            progressBar.removeAttribute("value");
+            progressText.textContent = "⏳";
+        } else {
+            progressBar.value = progressPercent;
+            progressText.textContent = progressPercent + "%";
+        }
+    }
+}
+
 function uploadComplete(response, progressBar, progressText, linkRow) {
     let target = response.target;
 
@@ -92,9 +142,10 @@ function uploadComplete(response, progressBar, progressText, linkRow) {
         const response = JSON.parse(target.responseText);
 
         if (response.status) {
+            console.log("Successfully uploaded file", response);
             makeFinished(progressBar, progressText, linkRow, response.url, response.hash);
         } else {
-            console.error("Error uploading", response)
+            console.error("Error uploading", response);
             makeErrored(progressBar, progressText, linkRow, response.response);
         }
     } else if (target.status === 413) {
@@ -105,6 +156,7 @@ function uploadComplete(response, progressBar, progressText, linkRow) {
 }
 
 function addNewToList(origFileName) {
+    const uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
     const linkRow = uploadedFilesDisplay.appendChild(document.createElement("div"));
     const fileName = linkRow.appendChild(document.createElement("p"));
     const progressBar = linkRow.appendChild(document.createElement("progress"));
@@ -119,30 +171,8 @@ function addNewToList(origFileName) {
     return [linkRow, progressBar, progressTxt];
 }
 
-function uploadProgress(progress, progressBar, progressText, linkRow) {
-    if (progress.lengthComputable) {
-        const progressPercent = Math.floor((progress.loaded / progress.total) * 100);
-        if (progressPercent == 100) {
-            progressBar.removeAttribute("value");
-            progressText.textContent = "⏳";
-        } else {
-            progressBar.value = progressPercent;
-            progressText.textContent = progressPercent + "%";
-        }
-    }
-}
-
-// This is the entrypoint for everything basically
-document.addEventListener("DOMContentLoaded", function(_event){
-    document.getElementById("uploadForm").addEventListener("submit", formSubmit);
-    statusNotifier = document.getElementById("uploadStatus");
-    uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
-    durationBox = document.getElementById("durationBox");
-
-    initEverything();
-});
-
 async function initEverything() {
+    const durationBox = document.getElementById("durationBox");
     const durationButtons = durationBox.getElementsByTagName("button");
     for (const b of durationButtons) {
         b.addEventListener("click", function (_e) {
@@ -155,3 +185,16 @@ async function initEverything() {
         });
     }
 }
+
+// This is the entrypoint for everything basically
+document.addEventListener("DOMContentLoaded", function(_event) {
+    const form = document.getElementById("uploadForm");
+    form.addEventListener("submit", formSubmit);
+    fileButton = document.getElementById("fileButton");
+
+    document.addEventListener("drop", (e) => {e.preventDefault();}, false);
+    fileButton.addEventListener("dragover", (e) => {e.preventDefault();}, false);
+    fileButton.addEventListener("drop", dragDropSubmit, false);
+
+    initEverything();
+});

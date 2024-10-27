@@ -58,7 +58,7 @@ fn home(settings: &State<Settings>) -> Markup {
             h1 { "Confetti-Box 🎉" }
             h2 { "Files up to " (settings.max_filesize.bytes()) " in size are allowed!" }
             hr;
-            button.main_file_upload onclick="document.getElementById('fileInput').click()" {
+            button.main_file_upload #fileButton onclick="document.getElementById('fileInput').click()" {
                 h4 { "Upload File(s)" }
                 p { "Click or Drag and Drop" }
             }
