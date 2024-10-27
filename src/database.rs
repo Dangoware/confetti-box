@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Values, HashMap, HashSet}, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}
+    collections::{hash_map::Values, HashMap, HashSet}, ffi::OsStr, fs::{self, File}, path::{Path, PathBuf}, sync::{Arc, RwLock}
 };
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
@@ -306,5 +306,40 @@ impl TryFrom<&str> for Mmid {
         }
 
         Ok(Self(value.to_owned()))
+    }
+}
+
+impl TryFrom<&Path> for Mmid {
+    type Error = ();
+
+    fn try_from(value: &Path) -> Result<Self, Self::Error> {
+        value.as_os_str().try_into()
+    }
+}
+
+impl TryFrom<&OsStr> for Mmid {
+    type Error = ();
+
+    fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
+        let string = match value.to_str() {
+            Some(p) => p,
+            None => return Err(()),
+        };
+
+        if string.len() != 8 {
+            return Err(())
+        }
+
+        if string.chars().any(|c| !c.is_ascii_alphanumeric()) {
+            return Err(())
+        }
+
+        Ok(Self(string.to_owned()))
+    }
+}
+
+impl std::fmt::Display for Mmid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

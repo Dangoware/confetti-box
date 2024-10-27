@@ -1,7 +1,7 @@
-use std::sync::{Arc, RwLock};
+use std::{path::PathBuf, sync::{Arc, RwLock}};
 
 use rocket::{
-    fs::NamedFile, get, http::ContentType, serde::{self, json::Json}, tokio::fs::File, State
+    get, http::ContentType, response::Redirect, serde::{self, json::Json}, tokio::fs::File, uri, State
 };
 use serde::Serialize;
 
@@ -36,56 +36,36 @@ pub struct ServerInfo {
 
 /// Look up the [`Mmid`] of a file to find it.
 #[get("/f/<mmid>")]
-pub async fn lookup(
+pub async fn lookup_mmid(
     db: &State<Arc<RwLock<Database>>>,
-    settings: &State<Settings>,
-    mmid: &str
-) -> Option<(ContentType, NamedFile)> {
-    let mmid: Mmid = match mmid.try_into() {
-        Ok(v) => v,
-        Err(_) => return None,
-    };
+    mmid: &str,
+) -> Option<Redirect> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
 
-    let entry = if let Some(e) = db.read().unwrap().get(&mmid).cloned() {
-        e
-    } else {
-        return None
-    };
-
-    let file = NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
-
-    Some((
-        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
-        file
-    ))
+    Some(
+        Redirect::to(uri!(lookup_mmid_name(mmid.to_string(), entry.name())))
+    )
 }
 
-
-#[get("/f/<mmid>/<filename>")]
-pub async fn lookup_filename(
+/// Look up the [`Mmid`] of a file to find it.
+#[get("/f/<mmid>/<name>")]
+pub async fn lookup_mmid_name(
     db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
     mmid: &str,
-    filename: &str,
-) -> Option<(ContentType, NamedFile)> {
-    let mmid: Mmid = match mmid.try_into() {
-        Ok(v) => v,
-        Err(_) => return None,
-    };
+    name: &str,
+) -> Option<(ContentType, File)> {
+    let mmid: Mmid = mmid.try_into().ok()?;
 
-    let entry = if let Some(e) = db.read().unwrap().get(&mmid).cloned() {
-        e
-    } else {
-        return None
-    };
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
 
-    dbg!(entry.name());
-    dbg!(filename);
-    if entry.name() != filename {
+    // If the name does not match, then this is invalid
+    if name != entry.name() {
         return None
     }
 
-    let file = NamedFile::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
+    let file = File::open(settings.file_dir.join(entry.hash().to_string())).await.ok()?;
 
     Some((
         ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),

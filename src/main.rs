@@ -11,7 +11,7 @@ use std::{
 
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, Mmid, MochiFile};
-use endpoints::{lookup, lookup_filename, server_info};
+use endpoints::{lookup_mmid, lookup_mmid_name, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 use rocket::{
@@ -102,7 +102,7 @@ fn home(settings: &State<Settings>) -> Markup {
             footer {
                 p {a href="https://github.com/G2-Games/confetti-box" {"Source"}}
                 p {a href="https://g2games.dev/" {"My Website"}}
-                p {a href="#" {"Links"}}
+                p {a href="api" {"API Info"}}
                 p {a href="#" {"Go"}}
                 p {a href="#" {"Here"}}
             }
@@ -264,8 +264,8 @@ async fn main() {
                 stylesheet,
                 server_info,
                 favicon,
-                lookup,
-                lookup_filename,
+                lookup_mmid,
+                lookup_mmid_name,
             ],
         )
         .mount(
@@ -284,12 +284,14 @@ async fn main() {
     // Ensure the server gracefully shuts down
     rocket.expect("Server failed to shutdown gracefully");
 
-    info!("Stopping database cleaning thread");
+    info!("Stopping database cleaning thread...");
     shutdown
         .send(())
         .await
-        .expect("Failed to stop cleaner thread");
+        .expect("Failed to stop cleaner thread.");
+    info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
     local_db.write().unwrap().save();
+    info!("Saving database completed successfully.");
 }
