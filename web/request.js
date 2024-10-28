@@ -72,8 +72,8 @@ async function fileSend(files, duration, maxSize) {
         // Create and send FormData
         try {
             const formData = new FormData();
-            formData.append("fileUpload", file);
             formData.append("duration", duration);
+            formData.append("fileUpload", file);
             request.send(formData);
         } catch (e) {
             makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);

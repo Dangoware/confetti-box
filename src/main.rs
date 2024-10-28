@@ -3,6 +3,7 @@ mod endpoints;
 mod settings;
 mod strings;
 mod utils;
+mod pages;
 
 use std::{
     fs,
@@ -13,36 +14,15 @@ use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, Mmid, MochiFile};
 use endpoints::{lookup_mmid, lookup_mmid_name, server_info};
 use log::info;
-use maud::{html, Markup, PreEscaped, DOCTYPE};
+use maud::{html, Markup, PreEscaped};
+use pages::{api_info, footer, head};
 use rocket::{
-    data::{Limits, ToByteUnit},
-    form::Form,
-    fs::{FileServer, Options, TempFile},
-    get,
-    http::ContentType,
-    post,
-    response::content::{RawCss, RawJavaScript},
-    routes,
-    serde::{json::Json, Serialize},
-    tokio, Config, FromForm, State,
+    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
 use utils::hash_file;
 use uuid::Uuid;
-
-fn head(page_title: &str) -> Markup {
-    html! {
-        (DOCTYPE)
-        meta charset="UTF-8";
-        meta name="viewport" content="width=device-width, initial-scale=1";
-        title { (page_title) }
-        // Javascript stuff for client side handling
-        script src="./request.js" { }
-        link rel="icon" type="image/svg+xml" href="favicon.svg";
-        link rel="stylesheet" href="./main.css";
-    }
-}
 
 /// Stylesheet
 #[get("/main.css")]
@@ -65,6 +45,7 @@ fn favicon() -> (ContentType, &'static str) {
 fn home(settings: &State<Settings>) -> Markup {
     html! {
         (head("Confetti-Box"))
+        script src="./request.js" { }
 
         center {
             h1 { "Confetti-Box 🎉" }
@@ -86,10 +67,10 @@ fn home(settings: &State<Settings>) -> Markup {
             }
             form #uploadForm {
                 // It's stupid how these can't be styled so they're just hidden here...
-                input #fileInput type="file" name="fileUpload" multiple
-                    onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
                 input #fileDuration type="text" name="duration" minlength="2"
                     maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
+                input #fileInput type="file" name="fileUpload" multiple
+                    onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
             }
             hr;
 
@@ -99,13 +80,7 @@ fn home(settings: &State<Settings>) -> Markup {
             }
 
             hr;
-            footer {
-                p {a href="https://github.com/G2-Games/confetti-box" {"Source"}}
-                p {a href="https://g2games.dev/" {"My Website"}}
-                p {a href="api" {"API Info"}}
-                p {a href="#" {"Go"}}
-                p {a href="#" {"Here"}}
-            }
+            (footer())
         }
     }
 }
@@ -171,7 +146,7 @@ async fn handle_upload(
     // Move it to the new proper place
     std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
 
-    db.write().unwrap().insert(constructed_file.clone());
+    db.write().unwrap().insert(&file_mmid, constructed_file.clone());
     db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
@@ -253,6 +228,7 @@ async fn main() {
             config.server.root_path.clone() + "/",
             routes![
                 home,
+                api_info,
                 handle_upload,
                 form_handler_js,
                 stylesheet,

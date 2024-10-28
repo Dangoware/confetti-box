@@ -1,5 +1,3 @@
-@import url('https://g2games.dev/assets/fonts/fonts.css');
-
 body {
     font-family: sans-serif;
 }
@@ -72,6 +70,13 @@ button.main_file_upload {
 .button.selected {
     background-color: #84FFAE;
     border: 2px dashed grey;
+}
+
+pre {
+    color: white;
+    background-color: black;
+    font-size: 11pt;
+    padding: 10px;
 }
 
 #durationBox {

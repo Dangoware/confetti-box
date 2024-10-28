@@ -54,10 +54,9 @@ pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Optio
     ))))
 }
 
-/// Look up the [`Mmid`] of a file to find it.
+/// Look up the [`Mmid`] of a file to find it, along with the name of the file
 #[get("/f/<mmid>/<name>")]
-pub async fn lookup_mmid_name(
-    db: &State<Arc<RwLock<Database>>>,
+pub async fn lookup_mmid_name(db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
     mmid: &str,
     name: &str,

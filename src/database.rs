@@ -69,19 +69,19 @@ impl Database {
     /// Insert a [`MochiFile`] into the database.
     ///
     /// If the database already contained this value, then `false` is returned.
-    pub fn insert(&mut self, entry: MochiFile) -> bool {
+    pub fn insert(&mut self, mmid: &Mmid, entry: MochiFile) -> bool {
         if let Some(s) = self.hashes.get_mut(&entry.hash) {
             // If the database already contains the hash, make sure the file is unique
-            if !s.insert(entry.mmid.clone()) {
+            if !s.insert(mmid.clone()) {
                 return false;
             }
         } else {
             // If the database does not contain the hash, create a new set for it
             self.hashes
-                .insert(entry.hash, HashSet::from([entry.mmid.clone()]));
+                .insert(entry.hash, HashSet::from([mmid.clone()]));
         }
 
-        self.entries.insert(entry.mmid.clone(), entry.clone());
+        self.entries.insert(mmid.clone(), entry.clone());
 
         true
     }
@@ -266,7 +266,9 @@ pub async fn clean_loop(
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode, Hash, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Decode, Encode)]
+#[derive(Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
