@@ -85,7 +85,7 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
 
                 hr;
                 h2 { code {"/f/<mmid>"} }
-                pre { r#"GET mmid=MMID -> Redirect"# }
+                pre { r#"GET mmid=MMID -> Redirect or File"# }
                 p {
                     "By default issues a redirect to the full URL for a file. This
                     behavior can be modified by appending " code{"?noredir"} " to
@@ -100,7 +100,7 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
 
                 hr;
                 h2 { code {"/f/<mmid>/<filename>"} }
-                pre { r#"GET mmid=MMID -> Redirect"# }
+                pre { r#"GET mmid=MMID filename=String -> File"# }
                 p {
                     "Returns the contents of the file corresponding to the
                     requested MMID, but with the corresponding filename so as
