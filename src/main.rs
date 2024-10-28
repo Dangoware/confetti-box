@@ -147,7 +147,6 @@ async fn handle_upload(
     std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
 
     db.write().unwrap().insert(&file_mmid, constructed_file.clone());
-    db.write().unwrap().save();
 
     Ok(Json(ClientResponse {
         status: true,

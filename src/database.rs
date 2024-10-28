@@ -245,6 +245,7 @@ fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
     info!("Cleaned database. Removed {removed_entries} expired entries. Removed {removed_files} no longer referenced files.");
 
     database.save();
+    drop(database); // Just to be sure
 }
 
 /// A loop to clean the database periodically.
