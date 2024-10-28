@@ -1,22 +1,24 @@
+/*jshint esversion: 11 */
+
 const TOO_LARGE_TEXT = "Too large!";
 const ZERO_TEXT = "File is blank!";
 const ERROR_TEXT = "Error!";
 
 async function formSubmit() {
     const form = document.getElementById("uploadForm");
-    const files = form.elements["fileUpload"].files;
-    const duration = form.elements["duration"].value;
-    const maxSize = form.elements["fileUpload"].dataset.maxFilesize;
+    const files = form.elements.fileUpload.files;
+    const duration = form.elements.duration.value;
+    const maxSize = form.elements.fileUpload.dataset.maxFilesize;
 
     await fileSend(files, duration, maxSize);
 
     // Reset the form file data since we've successfully submitted it
-    form.elements["fileUpload"].value = "";
+    form.elements.fileUpload.value = "";
 }
 
 async function dragDropSubmit(evt) {
     const form = document.getElementById("uploadForm");
-    const duration = form.elements["duration"].value;
+    const duration = form.elements.duration.value;
 
     const files = getDroppedFiles(evt);
 
@@ -51,11 +53,11 @@ async function fileSend(files, duration, maxSize) {
         if (file.size > maxSize) {
             makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
             console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
-            continue
+            continue;
         } else if (file.size == 0) {
             makeErrored(progressBar, progressText, linkRow, ZERO_TEXT);
             console.error("Provided file has 0 bytes");
-            continue
+            continue;
         }
 
         const request = new XMLHttpRequest();
@@ -63,11 +65,11 @@ async function fileSend(files, duration, maxSize) {
 
         // Set up event listeners
         request.upload.addEventListener('progress',
-            (p) => {uploadProgress(p, progressBar, progressText, linkRow)}, false);
+            (p) => {uploadProgress(p, progressBar, progressText, linkRow);}, false);
         request.addEventListener('load',
-            (c) => {uploadComplete(c, progressBar, progressText, linkRow)}, false);
+            (c) => {uploadComplete(c, progressBar, progressText, linkRow);}, false);
         request.addEventListener('error',
-            (e) => {networkErrorHandler(e, progressBar, progressText, linkRow)}, false);
+            (e) => {networkErrorHandler(e, progressBar, progressText, linkRow);}, false);
 
         // Create and send FormData
         try {
@@ -90,7 +92,7 @@ function makeErrored(progressBar, progressText, linkRow, errorMessage) {
 
 function makeFinished(progressBar, progressText, linkRow, response) {
     progressText.textContent = "";
-    const name = encodeURIComponent(response.name);
+    const _name = encodeURIComponent(response.name);
     const link = progressText.appendChild(document.createElement("a"));
     link.textContent = response.mmid;
     link.href = "/f/" + response.mmid;
@@ -102,16 +104,16 @@ function makeFinished(progressBar, progressText, linkRow, response) {
     button.addEventListener('click', function(_e) {
         const mmid = response.mmid;
         if (buttonTimeout) {
-            clearTimeout(buttonTimeout)
+            clearTimeout(buttonTimeout);
         }
         navigator.clipboard.writeText(
                 window.location.protocol + "//" + window.location.host + "/f/" + mmid
-        )
+        );
         button.textContent = "✅";
         buttonTimeout = setTimeout(function() {
             button.textContent = "📝";
         }, 750);
-    })
+    });
 
     progressBar.style.display = "none";
     linkRow.style.background = "#a4ffbb";
@@ -177,10 +179,9 @@ async function initEverything() {
     for (const b of durationButtons) {
         b.addEventListener("click", function (_e) {
             if (this.classList.contains("selected")) {
-                return
+                return;
             }
-            document.getElementById("uploadForm").elements["duration"].value
-                = this.dataset.durationSeconds + "s";
+            document.getElementById("uploadForm").elements.duration.value = this.dataset.durationSeconds + "s";
             let selected = this.parentNode.getElementsByClassName("selected");
             selected[0].classList.remove("selected");
             this.classList.add("selected");
@@ -192,7 +193,7 @@ async function initEverything() {
 document.addEventListener("DOMContentLoaded", function(_event) {
     const form = document.getElementById("uploadForm");
     form.addEventListener("submit", formSubmit);
-    fileButton = document.getElementById("fileButton");
+    let fileButton = document.getElementById("fileButton");
 
     document.addEventListener("drop", (e) => {e.preventDefault();}, false);
     fileButton.addEventListener("dragover", (e) => {e.preventDefault();}, false);

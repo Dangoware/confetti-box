@@ -42,7 +42,6 @@ pub struct ServerInfo {
     allowed_durations: Vec<u32>,
 }
 
-/// Look up the [`Mmid`] of a file to find it.
 #[get("/f/<mmid>")]
 pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Option<Redirect> {
     let mmid: Mmid = mmid.try_into().ok()?;
@@ -54,9 +53,31 @@ pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Optio
     ))))
 }
 
-/// Look up the [`Mmid`] of a file to find it, along with the name of the file
+#[get("/f/<mmid>?noredir")]
+pub async fn lookup_mmid_noredir(
+    db: &State<Arc<RwLock<Database>>>,
+    settings: &State<Settings>,
+    mmid: &str,
+) -> Option<(ContentType, File)> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
+
+    let file = File::open(settings.file_dir.join(entry.hash().to_string()))
+        .await
+        .ok()?;
+
+    dbg!(entry.extension());
+
+    Some((
+        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        file,
+    ))
+}
+
 #[get("/f/<mmid>/<name>")]
-pub async fn lookup_mmid_name(db: &State<Arc<RwLock<Database>>>,
+pub async fn lookup_mmid_name(
+    db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
     mmid: &str,
     name: &str,

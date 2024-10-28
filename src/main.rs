@@ -12,12 +12,12 @@ use std::{
 
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, Mmid, MochiFile};
-use endpoints::{lookup_mmid, lookup_mmid_name, server_info};
+use endpoints::{lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped};
 use pages::{api_info, footer, head};
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::{FileServer, Options, TempFile}, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
+    data::{Limits, ToByteUnit}, form::Form, fs::TempFile, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
@@ -235,15 +235,9 @@ async fn main() {
                 server_info,
                 favicon,
                 lookup_mmid,
+                lookup_mmid_noredir,
                 lookup_mmid_name,
             ],
-        )
-        .mount(
-            config.server.root_path.clone() + "/files",
-            FileServer::new(
-                config.file_dir.clone(),
-                Options::Missing | Options::NormalizeDirs,
-            ),
         )
         .manage(database)
         .manage(config)

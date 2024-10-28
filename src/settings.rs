@@ -95,6 +95,7 @@ impl Settings {
 #[derive(Deserialize, Serialize, Debug)]
 #[serde(crate = "rocket::serde")]
 pub struct ServerSettings {
+    pub domain: String,
     pub address: String,
     pub port: u16,
 
@@ -105,6 +106,7 @@ pub struct ServerSettings {
 impl Default for ServerSettings {
     fn default() -> Self {
         Self {
+            domain: "example.com".into(),
             address: "127.0.0.1".into(),
             root_path: "/".into(),
             port: 8950,

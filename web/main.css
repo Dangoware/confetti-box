@@ -26,6 +26,10 @@ h1 {
     font-weight: bolder;
 }
 
+p {
+    line-height: 1.5;
+}
+
 button p {
     margin: 0;
 }
@@ -74,9 +78,21 @@ button.main_file_upload {
 
 pre {
     color: white;
-    background-color: black;
+    background-color: #161b22;
     font-size: 11pt;
     padding: 10px;
+    overflow: scroll;
+    tab-size: 4;
+}
+
+p code {
+    background-color: lightgray;
+    font-size: 12pt;
+    padding: 2px;
+}
+
+h2 code {
+    font-size: 15pt;
 }
 
 #durationBox {
