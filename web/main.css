@@ -81,7 +81,7 @@ pre {
     background-color: #161b22;
     font-size: 11pt;
     padding: 10px;
-    overflow: scroll;
+    overflow: auto;
     tab-size: 4;
 }
 
