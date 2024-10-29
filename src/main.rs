@@ -25,18 +25,18 @@ use utils::hash_file;
 use uuid::Uuid;
 
 /// Stylesheet
-#[get("/main.css")]
+#[get("/resources/main.css")]
 fn stylesheet() -> RawCss<&'static str> {
     RawCss(include_str!("../web/main.css"))
 }
 
 /// Upload handler javascript
-#[get("/request.js")]
+#[get("/resources/request.js")]
 fn form_handler_js() -> RawJavaScript<&'static str> {
     RawJavaScript(include_str!("../web/request.js"))
 }
 
-#[get("/favicon.svg")]
+#[get("/resources/favicon.svg")]
 fn favicon() -> (ContentType, &'static str) {
     (ContentType::SVG, include_str!("../web/favicon.svg"))
 }
@@ -45,7 +45,7 @@ fn favicon() -> (ContentType, &'static str) {
 fn home(settings: &State<Settings>) -> Markup {
     html! {
         (head("Confetti-Box"))
-        script src="./request.js" { }
+        script src="/resources/request.js" { }
 
         center {
             h1 { "Confetti-Box 🎉" }
