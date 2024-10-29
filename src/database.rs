@@ -151,7 +151,6 @@ impl Database {
 
 /// An entry in the database storing metadata about a file
 #[derive(Debug, Clone, Decode, Encode, Deserialize, Serialize)]
-#[serde(crate = "rocket::serde")]
 pub struct MochiFile {
     /// A unique identifier describing this file
     mmid: Mmid,
@@ -159,8 +158,8 @@ pub struct MochiFile {
     /// The original name of the file
     name: String,
 
-    /// The format the file is, for serving
-    extension: String,
+    /// The MIME type of the file
+    mime_type: String,
 
     /// The Blake3 hash of the file
     #[bincode(with_serde)]
@@ -180,7 +179,7 @@ impl MochiFile {
     pub fn new(
         mmid: Mmid,
         name: String,
-        extension: &str,
+        mime_type: String,
         hash: Hash,
         upload: DateTime<Utc>,
         expiry: DateTime<Utc>,
@@ -188,7 +187,7 @@ impl MochiFile {
         Self {
             mmid,
             name,
-            extension: extension.to_string(),
+            mime_type,
             hash,
             upload_datetime: upload,
             expiry_datetime: expiry,
@@ -216,8 +215,8 @@ impl MochiFile {
         &self.mmid
     }
 
-    pub fn extension(&self) -> &String {
-        &self.extension
+    pub fn mime_type(&self) -> &String {
+        &self.mime_type
     }
 }
 

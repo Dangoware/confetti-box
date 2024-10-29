@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::{str::FromStr, sync::{Arc, RwLock}};
 
 use rocket::{
     get,
@@ -11,7 +11,7 @@ use rocket::{
 use serde::Serialize;
 
 use crate::{
-    database::{Database, Mmid},
+    database::{Database, Mmid, MochiFile},
     settings::Settings,
 };
 
@@ -30,6 +30,18 @@ pub fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
             .map(|t| t.num_seconds() as u32)
             .collect(),
     })
+}
+
+/// Get information about a file
+#[get("/info/<mmid>")]
+pub async fn file_information(
+    db: &State<Arc<RwLock<Database>>>,
+    mmid: &str,
+) -> Option<Json<MochiFile>> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
+
+    Some(Json(entry))
 }
 
 #[derive(Serialize, Debug)]
@@ -60,17 +72,14 @@ pub async fn lookup_mmid_noredir(
     mmid: &str,
 ) -> Option<(ContentType, File)> {
     let mmid: Mmid = mmid.try_into().ok()?;
-
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
     let file = File::open(settings.file_dir.join(entry.hash().to_string()))
         .await
         .ok()?;
 
-    dbg!(entry.extension());
-
     Some((
-        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        ContentType::from_str(entry.mime_type()).unwrap_or(ContentType::Binary),
         file,
     ))
 }
@@ -83,7 +92,6 @@ pub async fn lookup_mmid_name(
     name: &str,
 ) -> Option<(ContentType, File)> {
     let mmid: Mmid = mmid.try_into().ok()?;
-
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
     // If the name does not match, then this is invalid
@@ -96,7 +104,7 @@ pub async fn lookup_mmid_name(
         .ok()?;
 
     Some((
-        ContentType::from_extension(entry.extension()).unwrap_or(ContentType::Binary),
+        ContentType::from_str(entry.mime_type()).unwrap_or(ContentType::Binary),
         file,
     ))
 }

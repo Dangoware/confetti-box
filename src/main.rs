@@ -140,13 +140,14 @@ async fn handle_upload(
     let constructed_file = MochiFile::new(
         file_mmid.clone(),
         raw_name,
-        file_type.extension(),
+        file_type.media_type().to_string(),
         file_hash,
         current,
         expiry
     );
 
-    // If the hash does not exist in the database, move the file to the backend, else, delete it
+    // If the hash does not exist in the database,
+    // move the file to the backend, else, delete it
     if db.read().unwrap().get_hash(&file_hash).is_none() {
         std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
     } else {
