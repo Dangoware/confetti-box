@@ -84,6 +84,17 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
                 }
 
                 hr;
+                h2 { code {"/info/<mmid>"} }
+                pre { r#"GET -> JSON"# }
+                p {
+                    "Returns information about a file by its MMID."
+                }
+                p {"Example response:"}
+                pre {
+                    "{\n\t\"mmid\": \"xNLF6ogx\",\n\t\"name\": \"1600-1200.jpg\",\n\t\"mime_type\": \"image/png\",\n\t\"hash\": \"2e8e0a493ef99dfd950e870e319213d33573f64ba32b5a5399dd6c79c7d5cf00\",\n\t\"upload_datetime\": \"2024-10-29T22:09:48.648562311Z\",\n\t\"expiry_datetime\": \"2024-10-30T04:09:48.648562311Z\"\n}"
+                }
+
+                hr;
                 h2 { code {"/f/<mmid>"} }
                 pre { r#"GET mmid=MMID -> Redirect or File"# }
                 p {

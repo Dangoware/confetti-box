@@ -11,6 +11,7 @@ use rocket::{
     serde::{Deserialize, Serialize},
     tokio::{select, sync::mpsc::Receiver, time},
 };
+use serde_with::{serde_as, DisplayFromStr};
 
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
@@ -150,6 +151,7 @@ impl Database {
 }
 
 /// An entry in the database storing metadata about a file
+#[serde_as]
 #[derive(Debug, Clone, Decode, Encode, Deserialize, Serialize)]
 pub struct MochiFile {
     /// A unique identifier describing this file
@@ -163,6 +165,7 @@ pub struct MochiFile {
 
     /// The Blake3 hash of the file
     #[bincode(with_serde)]
+    #[serde_as(as = "DisplayFromStr")]
     hash: Hash,
 
     /// The datetime when the file was uploaded

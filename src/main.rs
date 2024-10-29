@@ -12,7 +12,7 @@ use std::{
 
 use chrono::{DateTime, TimeDelta, Utc};
 use database::{clean_loop, Database, Mmid, MochiFile};
-use endpoints::{lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
+use endpoints::{file_info, lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped};
 use pages::{api_info, footer, head};
@@ -240,6 +240,7 @@ async fn main() {
                 form_handler_js,
                 stylesheet,
                 server_info,
+                file_info,
                 favicon,
                 lookup_mmid,
                 lookup_mmid_noredir,

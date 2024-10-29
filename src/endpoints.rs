@@ -34,7 +34,7 @@ pub fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
 
 /// Get information about a file
 #[get("/info/<mmid>")]
-pub async fn file_information(
+pub async fn file_info(
     db: &State<Arc<RwLock<Database>>>,
     mmid: &str,
 ) -> Option<Json<MochiFile>> {
