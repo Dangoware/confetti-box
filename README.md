@@ -9,12 +9,11 @@ A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](ht
 - Fast (enough), runs just fine on a Raspberry Pi
 - Simple API for interfacing with it programmatically
 - No database setup required, uses self-contained in memory database
-  serialized to a small file.
+  serialized to a small, LZ4 compressed file.
 
 ### Planned
 - Chunked uploads
 - Theming
-- Database serialization compression
 - More mochi
 
 ## Screenshot
