@@ -53,7 +53,7 @@ fn home(settings: &State<Settings>) -> Markup {
             hr;
             button.main_file_upload #fileButton onclick="document.getElementById('fileInput').click()" {
                 h4 { "Upload File(s)" }
-                p { "Click or Drag and Drop" }
+                p { "Click, Paste, or Drag and Drop" }
             }
             h3 { "Expire after:" }
             div id="durationBox" {

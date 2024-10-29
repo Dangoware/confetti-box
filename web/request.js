@@ -10,7 +10,7 @@ async function formSubmit() {
     const duration = form.elements.duration.value;
     const maxSize = form.elements.fileUpload.dataset.maxFilesize;
 
-    await fileSend(files, duration, maxSize);
+    await sendFile(files, duration, maxSize);
 
     // Reset the form file data since we've successfully submitted it
     form.elements.fileUpload.value = "";
@@ -20,12 +20,6 @@ async function dragDropSubmit(evt) {
     const form = document.getElementById("uploadForm");
     const duration = form.elements.duration.value;
 
-    const files = getDroppedFiles(evt);
-
-    await fileSend(files, duration);
-}
-
-function getDroppedFiles(evt) {
     evt.preventDefault();
 
     const files = [];
@@ -44,10 +38,25 @@ function getDroppedFiles(evt) {
         });
     }
 
-    return files;
+    await sendFile(files, duration);
 }
 
-async function fileSend(files, duration, maxSize) {
+async function pasteSubmit(evt) {
+    const form = document.getElementById("uploadForm");
+    const duration = form.elements.duration.value;
+
+    evt.preventDefault();
+
+    const files = [];
+    [...evt.clipboardData.files].forEach((file, _) => {
+        // If dropped items aren't files, reject them
+        files.push(file);
+    });
+
+    await sendFile(files, duration);
+}
+
+async function sendFile(files, duration, maxSize) {
     for (const file of files) {
         const [linkRow, progressBar, progressText] = addNewToList(file.name);
         if (file.size > maxSize) {
@@ -92,7 +101,6 @@ function makeErrored(progressBar, progressText, linkRow, errorMessage) {
 
 function makeFinished(progressBar, progressText, linkRow, response) {
     progressText.textContent = "";
-    const _name = encodeURIComponent(response.name);
     const link = progressText.appendChild(document.createElement("a"));
     link.textContent = response.mmid;
     link.href = "/f/" + response.mmid;
@@ -191,11 +199,17 @@ async function initEverything() {
 
 // This is the entrypoint for everything basically
 document.addEventListener("DOMContentLoaded", function(_event) {
+    // Respond to form submissions
     const form = document.getElementById("uploadForm");
     form.addEventListener("submit", formSubmit);
-    let fileButton = document.getElementById("fileButton");
 
+    // Respond to file paste events
+    window.addEventListener("paste", (event) => {pasteSubmit(event)});
+
+    // Respond to drag and drop stuff
+    let fileButton = document.getElementById("fileButton");
     document.addEventListener("drop", (e) => {e.preventDefault();}, false);
+    document.addEventListener("dragover", (e) => {e.preventDefault()}, false);
     fileButton.addEventListener("dragover", (e) => {e.preventDefault();}, false);
     fileButton.addEventListener("drop", dragDropSubmit, false);
 
