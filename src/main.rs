@@ -101,6 +101,7 @@ async fn handle_upload(
     db: &State<Arc<RwLock<Database>>>,
     settings: &State<Settings>,
 ) -> Result<Json<ClientResponse>, std::io::Error> {
+    let current = Utc::now();
     // Ensure the expiry time is valid, if not return an error
     let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
@@ -128,31 +129,37 @@ async fn handle_upload(
     let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
     file_data.file.persist_to(&temp_filename).await?;
 
-    // Get hash and random identifier
+    // Get hash and random identifier and expiry
     let file_mmid = Mmid::new();
     let file_hash = hash_file(&temp_filename).await?;
+    let expiry = current + expire_time;
 
     // Process filetype
     let file_type = file_format::FileFormat::from_file(&temp_filename)?;
 
-    let constructed_file = MochiFile::new_with_expiry(
+    let constructed_file = MochiFile::new(
         file_mmid.clone(),
         raw_name,
         file_type.extension(),
         file_hash,
-        expire_time,
+        current,
+        expiry
     );
 
-    // Move it to the new proper place
-    std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
+    // If the hash does not exist in the database, move the file to the backend, else, delete it
+    if db.read().unwrap().get_hash(&file_hash).is_none() {
+        std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
+    } else {
+        std::fs::remove_file(temp_filename)?;
+    }
 
     db.write().unwrap().insert(&file_mmid, constructed_file.clone());
 
     Ok(Json(ClientResponse {
         status: true,
         name: constructed_file.name().clone(),
-        mmid: Some(file_mmid),
-        hash: file_hash.to_string(),
+        mmid: Some(constructed_file.mmid().clone()),
+        hash: constructed_file.hash().to_string(),
         expires: Some(constructed_file.expiry()),
         ..Default::default()
     }))
@@ -211,7 +218,7 @@ async fn main() {
         ..Default::default()
     };
 
-    let database = Arc::new(RwLock::new(Database::open(&config.database_path)));
+    let database = Arc::new(RwLock::new(Database::open_or_new(&config.database_path).expect("Failed to open or create database")));
     let local_db = database.clone();
 
     // Start monitoring thread, cleaning the database every 2 minutes
@@ -255,6 +262,6 @@ async fn main() {
     info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
-    local_db.write().unwrap().save();
+    local_db.write().unwrap().save().expect("Failed to save database");
     info!("Saving database completed successfully.");
 }

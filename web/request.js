@@ -45,13 +45,12 @@ async function pasteSubmit(evt) {
     const form = document.getElementById("uploadForm");
     const duration = form.elements.duration.value;
 
-    evt.preventDefault();
-
     const files = [];
-    [...evt.clipboardData.files].forEach((file, _) => {
-        // If dropped items aren't files, reject them
+    const len = evt.clipboardData.files.length;
+    for (let i = 0; i < len; i++) {
+        const file = evt.clipboardData.files[i];
         files.push(file);
-    });
+    }
 
     await sendFile(files, duration);
 }
@@ -204,7 +203,9 @@ document.addEventListener("DOMContentLoaded", function(_event) {
     form.addEventListener("submit", formSubmit);
 
     // Respond to file paste events
-    window.addEventListener("paste", (event) => {pasteSubmit(event)});
+    window.addEventListener("paste", (event) => {
+        pasteSubmit(event)
+    });
 
     // Respond to drag and drop stuff
     let fileButton = document.getElementById("fileButton");

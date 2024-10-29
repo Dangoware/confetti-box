@@ -1,15 +1,11 @@
 use std::{
-    collections::{hash_map::Values, HashMap, HashSet},
-    ffi::OsStr,
-    fs::{self, File},
-    path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    collections::{hash_map::Values, HashMap, HashSet}, ffi::OsStr, fs::{self, File}, io, path::{Path, PathBuf}, sync::{Arc, RwLock}
 };
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
-use log::{info, warn};
+use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     serde::{Deserialize, Serialize},
@@ -32,38 +28,52 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new<P: AsRef<Path>>(path: &P) -> Self {
-        let mut file = File::create_new(path).expect("Could not create database!");
-
+    pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
         let output = Self {
             path: path.as_ref().to_path_buf(),
             entries: HashMap::new(),
             hashes: HashMap::new(),
         };
 
-        encode_into_std_write(&output, &mut file, BINCODE_CFG).expect("Could not write database!");
+        // Save the database initially after creating it
+        output.save()?;
 
-        output
+        Ok(output)
+    }
+
+    /// Open the database from a path
+    pub fn open<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
+        let file = File::open(path)?;
+        let mut lz4_file = lz4_flex::frame::FrameDecoder::new(file);
+
+        decode_from_std_read(&mut lz4_file, BINCODE_CFG)
+            .map_err(|e| io::Error::other(format!("failed to open database: {e}")))
     }
 
     /// Open the database from a path, **or create it if it does not exist**
-    pub fn open<P: AsRef<Path>>(path: &P) -> Self {
+    pub fn open_or_new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
         if !path.as_ref().exists() {
             Self::new(path)
         } else {
-            let mut file = File::open(path).expect("Could not get database file!");
-            decode_from_std_read(&mut file, BINCODE_CFG).expect("Could not decode database")
+            Self::open(path)
         }
     }
 
     /// Save the database to its file
-    pub fn save(&self) {
-        let mut out_path = self.path.clone();
-        out_path.set_extension(".bkp");
-        let mut file = File::create(&out_path).expect("Could not save!");
-        encode_into_std_write(self, &mut file, BINCODE_CFG).expect("Could not write out!");
+    pub fn save(&self) -> Result<(), io::Error> {
+        // Create a file and write the LZ4 compressed stream into it
+        let file = File::create(&self.path.with_extension("bkp"))?;
+        let mut lz4_file = lz4_flex::frame::FrameEncoder::new(file);
+        encode_into_std_write(self, &mut lz4_file, BINCODE_CFG)
+            .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
+        lz4_file.try_finish()?;
 
-        fs::rename(out_path, &self.path).unwrap();
+        fs::rename(
+            self.path.with_extension("bkp"),
+            &self.path
+        ).unwrap();
+
+        Ok(())
     }
 
     /// Insert a [`MochiFile`] into the database.
@@ -130,6 +140,10 @@ impl Database {
         self.entries.get(mmid)
     }
 
+    pub fn get_hash(&self, hash: &Hash) -> Option<&HashSet<Mmid>> {
+        self.hashes.get(hash)
+    }
+
     pub fn entries(&self) -> Values<'_, Mmid, MochiFile> {
         self.entries.values()
     }
@@ -163,22 +177,20 @@ pub struct MochiFile {
 
 impl MochiFile {
     /// Create a new file that expires in `expiry`.
-    pub fn new_with_expiry(
+    pub fn new(
         mmid: Mmid,
         name: String,
         extension: &str,
         hash: Hash,
-        expire_duration: TimeDelta,
+        upload: DateTime<Utc>,
+        expiry: DateTime<Utc>,
     ) -> Self {
-        let current = Utc::now();
-        let expiry = current + expire_duration;
-
         Self {
             mmid,
             name,
             extension: extension.to_string(),
             hash,
-            upload_datetime: current,
+            upload_datetime: upload,
             expiry_datetime: expiry,
         }
     }
@@ -244,7 +256,9 @@ fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
 
     info!("Cleaned database. Removed {removed_entries} expired entries. Removed {removed_files} no longer referenced files.");
 
-    database.save();
+    if let Err(e) = database.save() {
+        error!("Failed to save database: {e}")
+    }
     drop(database); // Just to be sure
 }
 
