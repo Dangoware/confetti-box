@@ -2,9 +2,20 @@
 A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](https://uguu.se).
 
 ## Features
-- Entirely self contained, single binary
-- Customizable using a simple TOML config file
-- ??? (TODO: Add more)
+### Current
+- Entirely self contained, tiny (~4MB) single binary 
+- Customizable using a simple config file
+- Only stores one copy of a given hash on the backend
+- Fast (enough), runs just fine on a Raspberry Pi
+- Simple API for interfacing with it programmatically
+- No database setup required, uses self-contained in memory database
+  serialized to a small file.
+
+### Planned
+- Chunked uploads
+- Theming
+- Database serialization compression
+- More mochi
 
 ## Screenshot
 <p align="center">
