@@ -18,8 +18,8 @@ pub fn footer() -> Markup {
     html! {
         footer {
             p {a href="/" {"Home"}}
-            p {a href="about" {"About"}}
-            p {a href="api" {"API"}}
+            p {a href="/about" {"About"}}
+            p {a href="/api" {"API"}}
             p {a href="https://github.com/Dangoware/confetti-box" {"Source"}}
             p {a href="https://github.com/Dangoware/" {"Dangoware"}}
         }
