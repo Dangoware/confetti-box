@@ -1,4 +1,7 @@
-use std::{str::FromStr, sync::{Arc, RwLock}};
+use std::{
+    str::FromStr,
+    sync::{Arc, RwLock},
+};
 
 use rocket::{
     get,
@@ -11,7 +14,7 @@ use rocket::{
 use serde::Serialize;
 
 use crate::{
-    database::{Mochibase, Mmid, MochiFile},
+    database::{Mmid, MochiFile, Mochibase},
     settings::Settings,
 };
 
@@ -34,10 +37,7 @@ pub fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
 
 /// Get information about a file
 #[get("/info/<mmid>")]
-pub async fn file_info(
-    db: &State<Arc<RwLock<Mochibase>>>,
-    mmid: &str,
-) -> Option<Json<MochiFile>> {
+pub async fn file_info(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Option<Json<MochiFile>> {
     let mmid: Mmid = mmid.try_into().ok()?;
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 

@@ -1,5 +1,5 @@
 use maud::{html, Markup, DOCTYPE};
-use rocket::{get, http::ContentType, response::content::{RawCss, RawJavaScript}, State};
+use rocket::{get, State};
 
 use crate::settings::Settings;
 

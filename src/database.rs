@@ -1,5 +1,10 @@
 use std::{
-    collections::{hash_map::Values, HashMap, HashSet}, ffi::OsStr, fs::{self, File}, io, path::{Path, PathBuf}, sync::{Arc, RwLock}
+    collections::{hash_map::Values, HashMap, HashSet},
+    ffi::OsStr,
+    fs::{self, File},
+    io,
+    path::{Path, PathBuf},
+    sync::{Arc, RwLock},
 };
 
 use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
@@ -63,16 +68,13 @@ impl Mochibase {
     /// Save the database to its file
     pub fn save(&self) -> Result<(), io::Error> {
         // Create a file and write the LZ4 compressed stream into it
-        let file = File::create(&self.path.with_extension("bkp"))?;
+        let file = File::create(self.path.with_extension("bkp"))?;
         let mut lz4_file = lz4_flex::frame::FrameEncoder::new(file);
         encode_into_std_write(self, &mut lz4_file, BINCODE_CFG)
             .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
         lz4_file.try_finish()?;
 
-        fs::rename(
-            self.path.with_extension("bkp"),
-            &self.path
-        ).unwrap();
+        fs::rename(self.path.with_extension("bkp"), &self.path).unwrap();
 
         Ok(())
     }
@@ -283,14 +285,12 @@ pub async fn clean_loop(
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Decode, Encode)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Decode, Encode, Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
     /// Create a new random MMID
-    pub fn new() -> Self {
+    pub fn new_random() -> Self {
         let string = Alphanumeric.sample_string(&mut rand::thread_rng(), 8);
 
         Self(string)

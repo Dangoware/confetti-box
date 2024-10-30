@@ -1,7 +1,14 @@
-use std::{fs, sync::{Arc, RwLock}};
+use std::{
+    fs,
+    sync::{Arc, RwLock},
+};
 
 use chrono::TimeDelta;
-use confetti_box::{database::{clean_loop, Mochibase}, endpoints, pages, resources, settings::Settings};
+use confetti_box::{
+    database::{clean_loop, Mochibase},
+    endpoints, pages, resources,
+    settings::Settings,
+};
 use log::info;
 use rocket::{data::ToByteUnit as _, routes, tokio};
 
@@ -29,7 +36,9 @@ async fn main() {
         ..Default::default()
     };
 
-    let database = Arc::new(RwLock::new(Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database")));
+    let database = Arc::new(RwLock::new(
+        Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database"),
+    ));
     let local_db = database.clone();
 
     // Start monitoring thread, cleaning the database every 2 minutes
@@ -81,6 +90,10 @@ async fn main() {
     info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
-    local_db.write().unwrap().save().expect("Failed to save database");
+    local_db
+        .write()
+        .unwrap()
+        .save()
+        .expect("Failed to save database");
     info!("Saving database completed successfully.");
 }

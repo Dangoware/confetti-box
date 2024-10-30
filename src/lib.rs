@@ -1,23 +1,28 @@
 pub mod database;
 pub mod endpoints;
+pub mod pages;
+pub mod resources;
 pub mod settings;
 pub mod strings;
 pub mod utils;
-pub mod pages;
-pub mod resources;
 
 use std::sync::{Arc, RwLock};
 
-use chrono::{DateTime, Utc};
 use crate::database::{Mmid, MochiFile, Mochibase};
-use maud::{html, Markup, PreEscaped};
 use crate::pages::{footer, head};
-use rocket::{
-    data::ToByteUnit, form::Form, fs::TempFile, get, post, serde::{json::Json, Serialize}, FromForm, State
-};
 use crate::settings::Settings;
 use crate::strings::{parse_time_string, to_pretty_time};
 use crate::utils::hash_file;
+use chrono::{DateTime, Utc};
+use maud::{html, Markup, PreEscaped};
+use rocket::{
+    data::ToByteUnit,
+    form::Form,
+    fs::TempFile,
+    get, post,
+    serde::{json::Json, Serialize},
+    FromForm, State,
+};
 use uuid::Uuid;
 
 #[get("/")]
@@ -97,19 +102,19 @@ pub async fn handle_upload(
     };
 
     let raw_name = file_data
-    .file
-    .raw_name()
-    .unwrap()
-    .dangerous_unsafe_unsanitized_raw()
-    .as_str()
-    .to_string();
+        .file
+        .raw_name()
+        .unwrap()
+        .dangerous_unsafe_unsanitized_raw()
+        .as_str()
+        .to_string();
 
     // Get temp path for the file
     let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
     file_data.file.persist_to(&temp_filename).await?;
 
     // Get hash and random identifier and expiry
-    let file_mmid = Mmid::new();
+    let file_mmid = Mmid::new_random();
     let file_hash = hash_file(&temp_filename).await?;
     let expiry = current + expire_time;
 
@@ -118,11 +123,11 @@ pub async fn handle_upload(
 
     let constructed_file = MochiFile::new(
         file_mmid.clone(),
-                                          raw_name,
-                                          file_type.media_type().to_string(),
-                                          file_hash,
-                                          current,
-                                          expiry
+        raw_name,
+        file_type.media_type().to_string(),
+        file_hash,
+        current,
+        expiry,
     );
 
     // If the hash does not exist in the database,
@@ -133,15 +138,17 @@ pub async fn handle_upload(
         std::fs::remove_file(temp_filename)?;
     }
 
-    db.write().unwrap().insert(&file_mmid, constructed_file.clone());
+    db.write()
+        .unwrap()
+        .insert(&file_mmid, constructed_file.clone());
 
     Ok(Json(ClientResponse {
         status: true,
         name: constructed_file.name().clone(),
-            mmid: Some(constructed_file.mmid().clone()),
-            hash: constructed_file.hash().to_string(),
-            expires: Some(constructed_file.expiry()),
-            ..Default::default()
+        mmid: Some(constructed_file.mmid().clone()),
+        hash: constructed_file.hash().to_string(),
+        expires: Some(constructed_file.expiry()),
+        ..Default::default()
     }))
 }
 
