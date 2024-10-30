@@ -7,30 +7,29 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
+use ciborium::{from_reader, into_writer};
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
-    serde::{Deserialize, Serialize},
-    tokio::{select, sync::mpsc::Receiver, time},
+    form::{self, FromFormField, ValueField}, serde::{Deserialize, Serialize}, tokio::{select, sync::mpsc::Receiver, time}
 };
 use serde_with::{serde_as, DisplayFromStr};
+use uuid::Uuid;
 
-const BINCODE_CFG: Configuration = bincode::config::standard();
-
-#[derive(Debug, Clone, Decode, Encode)]
+#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize)]
 pub struct Mochibase {
     path: PathBuf,
 
     /// Every hash in the database along with the [`Mmid`]s associated with them
-    #[bincode(with_serde)]
     hashes: HashMap<Hash, HashSet<Mmid>>,
 
     /// All entries in the database
-    #[bincode(with_serde)]
     entries: HashMap<Mmid, MochiFile>,
+
+    chunks: HashMap<Uuid, DateTime<Utc>>,
 }
 
 impl Mochibase {
@@ -39,6 +38,7 @@ impl Mochibase {
             path: path.as_ref().to_path_buf(),
             entries: HashMap::new(),
             hashes: HashMap::new(),
+            chunks: HashMap::new(),
         };
 
         // Save the database initially after creating it
@@ -52,7 +52,7 @@ impl Mochibase {
         let file = File::open(path)?;
         let mut lz4_file = lz4_flex::frame::FrameDecoder::new(file);
 
-        decode_from_std_read(&mut lz4_file, BINCODE_CFG)
+        from_reader(&mut lz4_file)
             .map_err(|e| io::Error::other(format!("failed to open database: {e}")))
     }
 
@@ -70,7 +70,7 @@ impl Mochibase {
         // Create a file and write the LZ4 compressed stream into it
         let file = File::create(self.path.with_extension("bkp"))?;
         let mut lz4_file = lz4_flex::frame::FrameEncoder::new(file);
-        encode_into_std_write(self, &mut lz4_file, BINCODE_CFG)
+        into_writer(self, &mut lz4_file)
             .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
         lz4_file.try_finish()?;
 
@@ -154,7 +154,8 @@ impl Mochibase {
 
 /// An entry in the database storing metadata about a file
 #[serde_as]
-#[derive(Debug, Clone, Decode, Encode, Deserialize, Serialize)]
+#[derive(Debug, Clone)]
+#[derive(Deserialize, Serialize)]
 pub struct MochiFile {
     /// A unique identifier describing this file
     mmid: Mmid,
@@ -166,16 +167,13 @@ pub struct MochiFile {
     mime_type: String,
 
     /// The Blake3 hash of the file
-    #[bincode(with_serde)]
     #[serde_as(as = "DisplayFromStr")]
     hash: Hash,
 
     /// The datetime when the file was uploaded
-    #[bincode(with_serde)]
     upload_datetime: DateTime<Utc>,
 
     /// The datetime when the file is set to expire
-    #[bincode(with_serde)]
     expiry_datetime: DateTime<Utc>,
 }
 
@@ -285,7 +283,8 @@ pub async fn clean_loop(
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Decode, Encode, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
@@ -345,5 +344,14 @@ impl TryFrom<&OsStr> for Mmid {
 impl std::fmt::Display for Mmid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[rocket::async_trait]
+impl<'r> FromFormField<'r> for Mmid {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        Ok(
+            Self::try_from(field.value).map_err(|_| form::Error::validation("Invalid MMID"))?
+        )
     }
 }

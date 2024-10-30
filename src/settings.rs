@@ -48,7 +48,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            max_filesize: 1.megabytes().into(), // 128 MB
+            max_filesize: 1.megabytes().into(), // 1 MB
             overwrite: true,
             duration: DurationSettings::default(),
             server: ServerSettings::default(),

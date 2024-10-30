@@ -8,20 +8,17 @@ pub mod utils;
 
 use std::sync::{Arc, RwLock};
 
-use crate::database::{Mmid, MochiFile, Mochibase};
-use crate::pages::{footer, head};
-use crate::settings::Settings;
-use crate::strings::{parse_time_string, to_pretty_time};
-use crate::utils::hash_file;
+use crate::{
+    database::{Mmid, MochiFile, Mochibase},
+    pages::{footer, head},
+    settings::Settings,
+    strings::{parse_time_string, to_pretty_time},
+    utils::hash_file,
+};
 use chrono::{DateTime, Utc};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit,
-    form::Form,
-    fs::TempFile,
-    get, post,
-    serde::{json::Json, Serialize},
-    FromForm, State,
+    data::ToByteUnit, form::Form, fs::TempFile, get, post, serde::{json::Json, Serialize}, FromForm, State
 };
 use uuid::Uuid;
 
@@ -76,6 +73,34 @@ pub struct Upload<'r> {
 
     #[field(name = "fileUpload")]
     file: TempFile<'r>,
+}
+
+/// A response to the client from the server
+#[derive(Serialize, Default, Debug)]
+pub struct ClientResponse {
+    /// Success or failure
+    pub status: bool,
+
+    pub response: &'static str,
+
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mmid: Option<Mmid>,
+    #[serde(skip_serializing_if = "str::is_empty")]
+    pub hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires: Option<DateTime<Utc>>,
+}
+
+impl ClientResponse {
+    fn failure(response: &'static str) -> Self {
+        Self {
+            status: false,
+            response,
+            ..Default::default()
+        }
+    }
 }
 
 /// Handle a file upload and store it
@@ -152,30 +177,28 @@ pub async fn handle_upload(
     }))
 }
 
-/// A response to the client from the server
-#[derive(Serialize, Default, Debug)]
-pub struct ClientResponse {
-    /// Success or failure
-    pub status: bool,
+pub struct ChunkedResponse {
+    /// UUID used for associating the chunk with the final file
+    uuid: Uuid,
 
-    pub response: &'static str,
+    /// Valid max chunk size in bytes
+    chunk_size: u64,
 
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mmid: Option<Mmid>,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub hash: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires: Option<DateTime<Utc>>,
+    /// The datetime at which the upload will be invalidated unless new
+    /// chunks have come in
+    timeout: DateTime<Utc>,
+
+    /// The datetime at which the upload will be invalidated even if new
+    /// chunks have come in
+    hard_timeout: DateTime<Utc>,
 }
 
-impl ClientResponse {
-    fn failure(response: &'static str) -> Self {
-        Self {
-            status: false,
-            response,
-            ..Default::default()
-        }
-    }
+/// Start a chunked upload. Response contains all the info you need to continue
+/// uploading chunks.
+#[get("/upload/chunked")]
+pub async fn chunked_start() -> Result<Json<ClientResponse>, std::io::Error> {
+
+
+
+    todo!()
 }
