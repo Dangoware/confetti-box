@@ -15,7 +15,7 @@ use database::{clean_loop, Database, Mmid, MochiFile};
 use endpoints::{file_info, lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped};
-use pages::{api_info, footer, head};
+use pages::{about, api_info, footer, head};
 use rocket::{
     data::{Limits, ToByteUnit}, form::Form, fs::TempFile, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
 };
@@ -236,6 +236,12 @@ async fn main() {
             routes![
                 home,
                 api_info,
+                about,
+            ],
+        )
+        .mount(
+            config.server.root_path.clone() + "/",
+            routes![
                 handle_upload,
                 form_handler_js,
                 stylesheet,

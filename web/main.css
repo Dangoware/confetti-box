@@ -1,5 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Chokokutai&family=Fira+Code:wght@300..700&family=M+PLUS+Rounded+1c:wght@100;300;400;500;700;800;900&family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap');
+
 body {
-    font-family: sans-serif;
+    font-family: "Roboto Flex", sans-serif;
+    font-size: 14pt;
+    font-optical-sizing: auto;
 }
 
 center {
@@ -12,13 +16,21 @@ footer {
     width: fit-content;
 
     p {
-        border-right: 1px dotted grey;
+        border-right: 2px dotted grey;
         padding: 0 10px;
     }
 
     p:last-child {
         border-right: none;
     }
+}
+
+hr {
+    background-color: gray;
+    width: 100%;
+    height: 2px;
+    display: block;
+    border: none;
 }
 
 h1 {
@@ -77,6 +89,7 @@ button.main_file_upload {
 }
 
 pre {
+    font-family: "Fira Code", monospace;
     color: white;
     background-color: #161b22;
     font-size: 11pt;
@@ -86,12 +99,14 @@ pre {
 }
 
 p code {
+    font-family: "Fira Code", monospace;
     background-color: lightgray;
     font-size: 12pt;
     padding: 2px;
 }
 
 h2 code {
+    font-family: "Fira Code", monospace;
     font-size: 15pt;
 }
 
@@ -124,7 +139,8 @@ h2 code {
 }
 
 #uploadedFilesDisplay p.status {
-    font-family: monospace;
+    font-family: "Fira Code", monospace;
+    font-weight: 500;
     font-size: 11pt;
     overflow: clip;
     text-overflow: ellipsis;
@@ -158,6 +174,38 @@ h2 code {
     width: 30px;
     margin: auto 0;
     background-color: white;
+}
+
+.upload_inprogress {
+
+}
+
+.upload_failed {
+    color: black;
+    background-color: #ffb2ae;
+    a:link {
+        all: revert;
+    }
+    a:visited {
+        all: revert;
+    }
+    a:hover {
+        all: revert;
+    }
+}
+
+.upload_done {
+    color: black;
+    background-color: #a4ffbb;
+    a:link {
+        all: revert;
+    }
+    a:visited {
+        all: revert;
+    }
+    a:hover {
+        all: revert;
+    }
 }
 
 progress {
@@ -207,14 +255,41 @@ progress:not([value])::-moz-progress-bar {
     border-radius: 5px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25) inset;
     width: 20%;
-    animation-name: example;
+    animation-name: bounce;
     animation-duration: 1s;
     animation-iteration-count: infinite;
     animation-direction: alternate;
     animation-timing-function: cubic-bezier(.17,.67,.83,.67);
 }
 
-@keyframes example {
+@keyframes bounce {
     from {margin-left: 0%}
     to {margin-left: 80%}
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #131316;
+        color: #ededed;
+    }
+
+    a:link {
+        color: #3c9fe5;
+    }
+
+    a:visited {
+        color: #37d6a7;
+    }
+
+    a:hover {
+        color: #79d646;
+    }
+
+    p code {
+        color: black;
+        white-space: pre;
+        background-color: lightgray;
+        font-size: 12pt;
+        padding: 2px;
+    }
 }

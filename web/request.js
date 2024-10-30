@@ -79,6 +79,8 @@ async function sendFile(files, duration, maxSize) {
         request.addEventListener('error',
             (e) => {networkErrorHandler(e, progressBar, progressText, linkRow);}, false);
 
+        linkRow.classList.add("upload_inprogress");
+
         // Create and send FormData
         try {
             const formData = new FormData();
@@ -95,7 +97,7 @@ async function sendFile(files, duration, maxSize) {
 function makeErrored(progressBar, progressText, linkRow, errorMessage) {
     progressText.textContent = errorMessage;
     progressBar.style.display = "none";
-    linkRow.style.background = "#ffb2ae";
+    linkRow.classList.add("upload_failed");
 }
 
 function makeFinished(progressBar, progressText, linkRow, response) {
@@ -123,7 +125,7 @@ function makeFinished(progressBar, progressText, linkRow, response) {
     });
 
     progressBar.style.display = "none";
-    linkRow.style.background = "#a4ffbb";
+    linkRow.classList.add("upload_done");
 }
 
 function networkErrorHandler(err, progressBar, progressText, linkRow) {

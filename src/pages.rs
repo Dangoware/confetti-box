@@ -18,10 +18,10 @@ pub fn footer() -> Markup {
     html! {
         footer {
             p {a href="/" {"Home"}}
-            p {a href="https://github.com/Dangoware/confetti-box" {"Source"}}
-            p {a href="https://g2games.dev/" {"My Website"}}
+            p {a href="about" {"About"}}
             p {a href="api" {"API"}}
-            p {a href="https://ko-fi.com/g2_games" {"Donate"}}
+            p {a href="https://github.com/Dangoware/confetti-box" {"Source"}}
+            p {a href="https://github.com/Dangoware/" {"Dangoware"}}
         }
     }
 }
@@ -120,6 +120,50 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
                 p {"Example response:"}
                 pre {
                     "<File Bytes>"
+                }
+            }
+
+            hr;
+            (footer())
+        }
+    }
+}
+
+#[get("/about")]
+pub fn about(settings: &State<Settings>) -> Markup {
+    html! {
+        (head("Confetti-Box | About"))
+
+        center {
+            h1 { "What's this?" }
+            hr;
+
+            div style="text-align: left;" {
+                p {
+                    "Confetti-Box is a temporary file host, inspired by "
+                    a target="_blank" href="//litterbox.catbox.moe" {"Litterbox"}
+                    " and " a target="_blank" href="//uguu.se" {"Uguu"} ".
+                    It is designed to be simple to use and host! Files are stored
+                    until they expire, at which point they are deleted to free up
+                    space on the server."
+                }
+
+                p {
+                    "Confetti-Box was created by and is maintained by "
+                    a target="_blank" href="#dangowaresite" {"Dangoware"} " and is open-source
+                    software available under the terms of the "
+                    a target="_blank" href="//www.gnu.org/licenses/agpl-3.0.txt" {"AGPL-3.0 license"}
+                    ". The source code is available on "
+                    a target="_blank" href="https://github.com/Dangoware/confetti-box" {"GitHub"}
+                    " and a couple of other places. The AGPL is very restrictive
+                    when it comes to use on servers, so if you would like to use
+                    Confetti-Box for a commercial purpose, please contact
+                    Dangoware."
+                }
+
+                p {
+                    "If you upload files which are disallowed either legally or
+                    by the terms of this particular service, they will be removed."
                 }
             }
 
