@@ -1,7 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Chokokutai&family=Fira+Code:wght@300..700&family=M+PLUS+Rounded+1c:wght@100;300;400;500;700;800;900&family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap');
+@font-face {
+  font-family: "Roboto";
+  src:
+    /*local("Roboto"),*/
+    url("/resources/Roboto.woff2");
+}
+
+@font-face {
+  font-family: "Fira Code";
+  src:
+    /*local("Fira Code"),*/
+    url("/resources/FiraCode.woff2");
+}
 
 body {
-    font-family: "Roboto Flex", sans-serif;
+    font-family: "Roboto", sans-serif;
     font-size: 14pt;
     font-optical-sizing: auto;
 }

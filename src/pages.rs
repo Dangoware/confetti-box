@@ -1,5 +1,5 @@
 use maud::{html, Markup, DOCTYPE};
-use rocket::{get, State};
+use rocket::{get, http::ContentType, response::content::{RawCss, RawJavaScript}, State};
 
 use crate::settings::Settings;
 
@@ -24,6 +24,32 @@ pub fn footer() -> Markup {
             p {a href="https://github.com/Dangoware/" {"Dangoware"}}
         }
     }
+}
+
+/// Stylesheet
+#[get("/resources/main.css")]
+pub fn stylesheet() -> RawCss<&'static str> {
+    RawCss(include_str!("../web/main.css"))
+}
+
+/// Upload handler javascript
+#[get("/resources/request.js")]
+pub fn form_handler_js() -> RawJavaScript<&'static str> {
+    RawJavaScript(include_str!("../web/request.js"))
+}
+
+#[get("/resources/favicon.svg")]
+pub fn favicon() -> (ContentType, &'static str) {
+    (ContentType::SVG, include_str!("../web/favicon.svg"))
+}
+
+#[get("/resources/Roboto.woff2")]
+pub fn roboto_flex() -> (ContentType, &'static [u8]) {
+    (ContentType::WOFF2, include_bytes!("../web/fonts/roboto.woff2"))
+}
+#[get("/resources/FiraCode.woff2")]
+pub fn fira_code() -> (ContentType, &'static [u8]) {
+    (ContentType::WOFF2, include_bytes!("../web/fonts/fira-code.woff2"))
 }
 
 #[get("/api")]
@@ -154,11 +180,10 @@ pub fn about(settings: &State<Settings>) -> Markup {
                     software available under the terms of the "
                     a target="_blank" href="//www.gnu.org/licenses/agpl-3.0.txt" {"AGPL-3.0 license"}
                     ". The source code is available on "
-                    a target="_blank" href="https://github.com/Dangoware/confetti-box" {"GitHub"}
-                    " and a couple of other places. The AGPL is very restrictive
-                    when it comes to use on servers, so if you would like to use
-                    Confetti-Box for a commercial purpose, please contact
-                    Dangoware."
+                    a target="_blank" href="//github.com/Dangoware/confetti-box" {"GitHub"}
+                    ". The AGPL is very restrictive when it comes to use on
+                    servers, so if you would like to use Confetti-Box for a
+                    commercial purpose, please contact Dangoware."
                 }
 
                 p {

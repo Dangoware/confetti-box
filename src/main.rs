@@ -15,31 +15,14 @@ use database::{clean_loop, Database, Mmid, MochiFile};
 use endpoints::{file_info, lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
 use log::info;
 use maud::{html, Markup, PreEscaped};
-use pages::{about, api_info, footer, head};
+use pages::{about, api_info, favicon, fira_code, footer, form_handler_js, head, roboto_flex, stylesheet};
 use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::TempFile, get, http::ContentType, post, response::content::{RawCss, RawJavaScript}, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
+    data::{Limits, ToByteUnit}, form::Form, fs::TempFile, get, post, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
 };
 use settings::Settings;
 use strings::{parse_time_string, to_pretty_time};
 use utils::hash_file;
 use uuid::Uuid;
-
-/// Stylesheet
-#[get("/resources/main.css")]
-fn stylesheet() -> RawCss<&'static str> {
-    RawCss(include_str!("../web/main.css"))
-}
-
-/// Upload handler javascript
-#[get("/resources/request.js")]
-fn form_handler_js() -> RawJavaScript<&'static str> {
-    RawJavaScript(include_str!("../web/request.js"))
-}
-
-#[get("/resources/favicon.svg")]
-fn favicon() -> (ContentType, &'static str) {
-    (ContentType::SVG, include_str!("../web/favicon.svg"))
-}
 
 #[get("/")]
 fn home(settings: &State<Settings>) -> Markup {
@@ -237,17 +220,19 @@ async fn main() {
                 home,
                 api_info,
                 about,
+                favicon,
+                form_handler_js,
+                stylesheet,
+                fira_code,
+                roboto_flex,
             ],
         )
         .mount(
             config.server.root_path.clone() + "/",
             routes![
                 handle_upload,
-                form_handler_js,
-                stylesheet,
                 server_info,
                 file_info,
-                favicon,
                 lookup_mmid,
                 lookup_mmid_noredir,
                 lookup_mmid_name,
