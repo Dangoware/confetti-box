@@ -1,20 +1,20 @@
 @font-face {
-  font-family: "Roboto";
-  src:
-    /*local("Roboto"),*/
-    url("/resources/Roboto.woff2");
+    font-family: "Roboto";
+    src:
+        local("Roboto"),
+        url("/resources/fonts/Roboto.woff2");
 }
 
 @font-face {
-  font-family: "Fira Code";
-  src:
-    /*local("Fira Code"),*/
-    url("/resources/FiraCode.woff2");
+    font-family: "Fira Code";
+    src:
+        local("Fira Code"),
+        url("/resources/fonts/FiraCode.woff2");
 }
 
 body {
     font-family: "Roboto", sans-serif;
-    font-size: 14pt;
+    font-size: 12pt;
     font-optical-sizing: auto;
 }
 

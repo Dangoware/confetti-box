@@ -11,7 +11,7 @@ use rocket::{
 use serde::Serialize;
 
 use crate::{
-    database::{Database, Mmid, MochiFile},
+    database::{Mochibase, Mmid, MochiFile},
     settings::Settings,
 };
 
@@ -35,7 +35,7 @@ pub fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
 /// Get information about a file
 #[get("/info/<mmid>")]
 pub async fn file_info(
-    db: &State<Arc<RwLock<Database>>>,
+    db: &State<Arc<RwLock<Mochibase>>>,
     mmid: &str,
 ) -> Option<Json<MochiFile>> {
     let mmid: Mmid = mmid.try_into().ok()?;
@@ -55,7 +55,7 @@ pub struct ServerInfo {
 }
 
 #[get("/f/<mmid>")]
-pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Option<Redirect> {
+pub async fn lookup_mmid(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Option<Redirect> {
     let mmid: Mmid = mmid.try_into().ok()?;
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
@@ -67,7 +67,7 @@ pub async fn lookup_mmid(db: &State<Arc<RwLock<Database>>>, mmid: &str) -> Optio
 
 #[get("/f/<mmid>?noredir")]
 pub async fn lookup_mmid_noredir(
-    db: &State<Arc<RwLock<Database>>>,
+    db: &State<Arc<RwLock<Mochibase>>>,
     settings: &State<Settings>,
     mmid: &str,
 ) -> Option<(ContentType, File)> {
@@ -86,7 +86,7 @@ pub async fn lookup_mmid_noredir(
 
 #[get("/f/<mmid>/<name>")]
 pub async fn lookup_mmid_name(
-    db: &State<Arc<RwLock<Database>>>,
+    db: &State<Arc<RwLock<Mochibase>>>,
     settings: &State<Settings>,
     mmid: &str,
     name: &str,

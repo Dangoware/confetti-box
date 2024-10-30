@@ -26,32 +26,6 @@ pub fn footer() -> Markup {
     }
 }
 
-/// Stylesheet
-#[get("/resources/main.css")]
-pub fn stylesheet() -> RawCss<&'static str> {
-    RawCss(include_str!("../web/main.css"))
-}
-
-/// Upload handler javascript
-#[get("/resources/request.js")]
-pub fn form_handler_js() -> RawJavaScript<&'static str> {
-    RawJavaScript(include_str!("../web/request.js"))
-}
-
-#[get("/resources/favicon.svg")]
-pub fn favicon() -> (ContentType, &'static str) {
-    (ContentType::SVG, include_str!("../web/favicon.svg"))
-}
-
-#[get("/resources/Roboto.woff2")]
-pub fn roboto_flex() -> (ContentType, &'static [u8]) {
-    (ContentType::WOFF2, include_bytes!("../web/fonts/roboto.woff2"))
-}
-#[get("/resources/FiraCode.woff2")]
-pub fn fira_code() -> (ContentType, &'static [u8]) {
-    (ContentType::WOFF2, include_bytes!("../web/fonts/fira-code.woff2"))
-}
-
 #[get("/api")]
 pub fn api_info(settings: &State<Settings>) -> Markup {
     let domain = &settings.server.domain;
@@ -156,7 +130,7 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
 }
 
 #[get("/about")]
-pub fn about(settings: &State<Settings>) -> Markup {
+pub fn about() -> Markup {
     html! {
         (head("Confetti-Box | About"))
 

@@ -16,7 +16,7 @@ use serde_with::{serde_as, DisplayFromStr};
 const BINCODE_CFG: Configuration = bincode::config::standard();
 
 #[derive(Debug, Clone, Decode, Encode)]
-pub struct Database {
+pub struct Mochibase {
     path: PathBuf,
 
     /// Every hash in the database along with the [`Mmid`]s associated with them
@@ -28,7 +28,7 @@ pub struct Database {
     entries: HashMap<Mmid, MochiFile>,
 }
 
-impl Database {
+impl Mochibase {
     pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
         let output = Self {
             path: path.as_ref().to_path_buf(),
@@ -225,7 +225,7 @@ impl MochiFile {
 
 /// Clean the database. Removes files which are past their expiry
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
-fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
+fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     let mut database = db.write().unwrap();
 
     // Add expired entries to the removal list
@@ -256,7 +256,7 @@ fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
         }
     }
 
-    info!("Cleaned database. Removed {removed_entries} expired entries. Removed {removed_files} no longer referenced files.");
+    info!("Cleaned database.\n\t| Removed {removed_entries} expired entries.\n\t| Removed {removed_files} no longer referenced files.");
 
     if let Err(e) = database.save() {
         error!("Failed to save database: {e}")
@@ -266,7 +266,7 @@ fn clean_database(db: &Arc<RwLock<Database>>, file_path: &Path) {
 
 /// A loop to clean the database periodically.
 pub async fn clean_loop(
-    db: Arc<RwLock<Database>>,
+    db: Arc<RwLock<Mochibase>>,
     file_path: PathBuf,
     mut shutdown_signal: Receiver<()>,
     interval: TimeDelta,

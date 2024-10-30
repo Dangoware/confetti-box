@@ -1,182 +1,9 @@
-mod database;
-mod endpoints;
-mod settings;
-mod strings;
-mod utils;
-mod pages;
+use std::{fs, sync::{Arc, RwLock}};
 
-use std::{
-    fs,
-    sync::{Arc, RwLock},
-};
-
-use chrono::{DateTime, TimeDelta, Utc};
-use database::{clean_loop, Database, Mmid, MochiFile};
-use endpoints::{file_info, lookup_mmid, lookup_mmid_name, lookup_mmid_noredir, server_info};
+use chrono::TimeDelta;
+use confetti_box::{database::{clean_loop, Mochibase}, endpoints, pages, resources, settings::Settings};
 use log::info;
-use maud::{html, Markup, PreEscaped};
-use pages::{about, api_info, favicon, fira_code, footer, form_handler_js, head, roboto_flex, stylesheet};
-use rocket::{
-    data::{Limits, ToByteUnit}, form::Form, fs::TempFile, get, post, routes, serde::{json::Json, Serialize}, tokio, Config, FromForm, State
-};
-use settings::Settings;
-use strings::{parse_time_string, to_pretty_time};
-use utils::hash_file;
-use uuid::Uuid;
-
-#[get("/")]
-fn home(settings: &State<Settings>) -> Markup {
-    html! {
-        (head("Confetti-Box"))
-        script src="/resources/request.js" { }
-
-        center {
-            h1 { "Confetti-Box 🎉" }
-            h2 { "Files up to " (settings.max_filesize.bytes()) " in size are allowed!" }
-            hr;
-            button.main_file_upload #fileButton onclick="document.getElementById('fileInput').click()" {
-                h4 { "Upload File(s)" }
-                p { "Click, Paste, or Drag and Drop" }
-            }
-            h3 { "Expire after:" }
-            div id="durationBox" {
-                @for d in &settings.duration.allowed {
-                    button.button.{@if settings.duration.default == *d { "selected" }}
-                        data-duration-seconds=(d.num_seconds())
-                    {
-                        (PreEscaped(to_pretty_time(d.num_seconds() as u32)))
-                    }
-                }
-            }
-            form #uploadForm {
-                // It's stupid how these can't be styled so they're just hidden here...
-                input #fileDuration type="text" name="duration" minlength="2"
-                    maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
-                input #fileInput type="file" name="fileUpload" multiple
-                    onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
-            }
-            hr;
-
-            h3 { "Uploaded Files" }
-            div #uploadedFilesDisplay {
-
-            }
-
-            hr;
-            (footer())
-        }
-    }
-}
-
-#[derive(Debug, FromForm)]
-struct Upload<'r> {
-    #[field(name = "duration")]
-    expire_time: String,
-
-    #[field(name = "fileUpload")]
-    file: TempFile<'r>,
-}
-
-/// Handle a file upload and store it
-#[post("/upload", data = "<file_data>")]
-async fn handle_upload(
-    mut file_data: Form<Upload<'_>>,
-    db: &State<Arc<RwLock<Database>>>,
-    settings: &State<Settings>,
-) -> Result<Json<ClientResponse>, std::io::Error> {
-    let current = Utc::now();
-    // Ensure the expiry time is valid, if not return an error
-    let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
-        if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
-            return Ok(Json(ClientResponse::failure("Duration not allowed")));
-        }
-
-        if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse::failure("Duration larger than max")));
-        }
-
-        t
-    } else {
-        return Ok(Json(ClientResponse::failure("Duration invalid")));
-    };
-
-    let raw_name = file_data
-        .file
-        .raw_name()
-        .unwrap()
-        .dangerous_unsafe_unsanitized_raw()
-        .as_str()
-        .to_string();
-
-    // Get temp path for the file
-    let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
-    file_data.file.persist_to(&temp_filename).await?;
-
-    // Get hash and random identifier and expiry
-    let file_mmid = Mmid::new();
-    let file_hash = hash_file(&temp_filename).await?;
-    let expiry = current + expire_time;
-
-    // Process filetype
-    let file_type = file_format::FileFormat::from_file(&temp_filename)?;
-
-    let constructed_file = MochiFile::new(
-        file_mmid.clone(),
-        raw_name,
-        file_type.media_type().to_string(),
-        file_hash,
-        current,
-        expiry
-    );
-
-    // If the hash does not exist in the database,
-    // move the file to the backend, else, delete it
-    if db.read().unwrap().get_hash(&file_hash).is_none() {
-        std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
-    } else {
-        std::fs::remove_file(temp_filename)?;
-    }
-
-    db.write().unwrap().insert(&file_mmid, constructed_file.clone());
-
-    Ok(Json(ClientResponse {
-        status: true,
-        name: constructed_file.name().clone(),
-        mmid: Some(constructed_file.mmid().clone()),
-        hash: constructed_file.hash().to_string(),
-        expires: Some(constructed_file.expiry()),
-        ..Default::default()
-    }))
-}
-
-/// A response to the client from the server
-#[derive(Serialize, Default, Debug)]
-#[serde(crate = "rocket::serde")]
-struct ClientResponse {
-    /// Success or failure
-    pub status: bool,
-
-    pub response: &'static str,
-
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mmid: Option<Mmid>,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub hash: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires: Option<DateTime<Utc>>,
-}
-
-impl ClientResponse {
-    fn failure(response: &'static str) -> Self {
-        Self {
-            status: false,
-            response,
-            ..Default::default()
-        }
-    }
-}
+use rocket::{data::ToByteUnit as _, routes, tokio};
 
 #[rocket::main]
 async fn main() {
@@ -192,17 +19,17 @@ async fn main() {
     }
 
     // Set rocket configuration settings
-    let rocket_config = Config {
+    let rocket_config = rocket::Config {
         address: config.server.address.parse().expect("IP address invalid"),
         port: config.server.port,
         temp_dir: config.temp_dir.clone().into(),
-        limits: Limits::default()
+        limits: rocket::data::Limits::default()
             .limit("data-form", config.max_filesize.bytes())
             .limit("file", config.max_filesize.bytes()),
         ..Default::default()
     };
 
-    let database = Arc::new(RwLock::new(Database::open_or_new(&config.database_path).expect("Failed to open or create database")));
+    let database = Arc::new(RwLock::new(Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database")));
     let local_db = database.clone();
 
     // Start monitoring thread, cleaning the database every 2 minutes
@@ -217,25 +44,24 @@ async fn main() {
         .mount(
             config.server.root_path.clone() + "/",
             routes![
-                home,
-                api_info,
-                about,
-                favicon,
-                form_handler_js,
-                stylesheet,
-                fira_code,
-                roboto_flex,
+                confetti_box::home,
+                pages::api_info,
+                pages::about,
+                resources::favicon,
+                resources::form_handler_js,
+                resources::stylesheet,
+                resources::font_static,
             ],
         )
         .mount(
             config.server.root_path.clone() + "/",
             routes![
-                handle_upload,
-                server_info,
-                file_info,
-                lookup_mmid,
-                lookup_mmid_noredir,
-                lookup_mmid_name,
+                confetti_box::handle_upload,
+                endpoints::server_info,
+                endpoints::file_info,
+                endpoints::lookup_mmid,
+                endpoints::lookup_mmid_noredir,
+                endpoints::lookup_mmid_name,
             ],
         )
         .manage(database)
