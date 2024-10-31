@@ -203,7 +203,7 @@ impl ChunkedResponse {
 
 /// Start a chunked upload. Response contains all the info you need to continue
 /// uploading chunks.
-#[post("/upload/chunked", data = "<file_info>", rank = 2)]
+#[post("/upload/chunked", data = "<file_info>")]
 pub async fn chunked_upload_start(
     db: &State<Arc<RwLock<Chunkbase>>>,
     settings: &State<Settings>,
@@ -238,11 +238,11 @@ pub async fn chunked_upload_start(
     }))
 }
 
-#[post("/upload/chunked?<uuid>&<offset>", data = "<data>", rank = 1)]
+#[post("/upload/chunked/<uuid>?<offset>", data = "<data>")]
 pub async fn chunked_upload_continue(
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
     data: Data<'_>,
-    uuid: String,
+    uuid: &str,
     offset: u64,
 ) -> Result<(), io::Error> {
     let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
@@ -285,12 +285,12 @@ pub async fn chunked_upload_continue(
 }
 
 /// Finalize a chunked upload
-#[get("/upload/chunked?<uuid>&finish", rank = 3)]
+#[get("/upload/chunked/<uuid>?finish")]
 pub async fn chunked_upload_finish(
     main_db: &State<Arc<RwLock<Mochibase>>>,
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
     settings: &State<Settings>,
-    uuid: String,
+    uuid: &str,
 ) -> Result<Json<MochiFile>, io::Error> {
     let now = Utc::now();
     let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
