@@ -13,7 +13,7 @@ use ciborium::{from_reader, into_writer};
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
-    form::{self, FromFormField, ValueField}, serde::{Deserialize, Serialize}, tokio::{select, sync::mpsc::Receiver, time}
+    form::{self, FromFormField, ValueField}, serde::{Deserialize, Serialize}
 };
 use serde_with::{serde_as, DisplayFromStr};
 use uuid::Uuid;
@@ -224,7 +224,7 @@ impl MochiFile {
 
 /// Clean the database. Removes files which are past their expiry
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
-fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
+pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     let mut database = db.write().unwrap();
 
     // Add expired entries to the removal list
@@ -261,23 +261,6 @@ fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
         error!("Failed to save database: {e}")
     }
     drop(database); // Just to be sure
-}
-
-/// A loop to clean the database periodically.
-pub async fn clean_loop(
-    db: Arc<RwLock<Mochibase>>,
-    file_path: PathBuf,
-    mut shutdown_signal: Receiver<()>,
-    interval: TimeDelta,
-) {
-    let mut interval = time::interval(interval.to_std().unwrap());
-
-    loop {
-        select! {
-            _ = interval.tick() => clean_database(&db, &file_path),
-            _ = shutdown_signal.recv() => break,
-        };
-    }
 }
 
 /// A unique identifier for an entry in the database, 8 characters long,
@@ -358,25 +341,39 @@ impl<'r> FromFormField<'r> for Mmid {
 /// An in-memory database for partially uploaded chunks of files
 #[derive(Default, Debug)]
 pub struct Chunkbase {
-    chunks: HashMap<Uuid, ChunkedInfo>,
+    chunks: HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)>,
 }
 
 impl Chunkbase {
-    pub fn chunks(&self) -> &HashMap<Uuid, ChunkedInfo> {
+    pub fn chunks(&self) -> &HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
         &self.chunks
     }
 
-    pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, ChunkedInfo> {
+    pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
         &mut self.chunks
     }
 
     /// Delete all temporary chunk files
     pub fn delete_all(&mut self) -> Result<(), io::Error> {
-        for chunk in &self.chunks {
-            fs::remove_file(&chunk.1.path)?;
+        for (_timeout, chunk) in self.chunks.values() {
+            fs::remove_file(&chunk.path)?;
         }
 
         self.chunks.clear();
+
+        Ok(())
+    }
+
+    pub fn delete_timed_out(&mut self) -> Result<(), io::Error> {
+        let now = Utc::now();
+        self.mut_chunks().retain(|_u, (t, c)| {
+            if *t <= now {
+                let _ = fs::remove_file(&c.path);
+                false
+            } else {
+                true
+            }
+        });
 
         Ok(())
     }

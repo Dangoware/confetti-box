@@ -13,7 +13,7 @@ use crate::{
     settings::Settings,
     strings::to_pretty_time,
 };
-use chrono::Utc;
+use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
@@ -118,7 +118,7 @@ pub async fn chunked_upload_start(
     db.write()
         .unwrap()
         .mut_chunks()
-        .insert(uuid, file_info.into_inner());
+        .insert(uuid, (Utc::now() + TimeDelta::seconds(30), file_info.into_inner()));
 
     Ok(Json(ChunkedResponse {
         status: true,
@@ -136,7 +136,7 @@ pub async fn chunked_upload_continue(
     uuid: &str,
     offset: u64,
 ) -> Result<(), io::Error> {
-    let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
+    let uuid = Uuid::parse_str(uuid).map_err(io::Error::other)?;
     let data_stream = data.open((settings.chunk_size + 100).bytes());
 
     let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
@@ -148,19 +148,19 @@ pub async fn chunked_upload_continue(
         .read(true)
         .write(true)
         .truncate(false)
-        .open(&chunked_info.path)
+        .open(&chunked_info.1.path)
         .await?;
 
-    if offset > chunked_info.size {
+    if offset > chunked_info.1.size {
         return Err(io::Error::new(ErrorKind::InvalidInput, "The seek position is larger than the file size"))
     }
 
     file.seek(io::SeekFrom::Start(offset)).await?;
-    data_stream.stream_to(&mut file).await?.written;
+    data_stream.stream_to(&mut file).await?;
     file.flush().await?;
     let position = file.stream_position().await?;
 
-    if position > chunked_info.size {
+    if position > chunked_info.1.size {
         chunk_db.write()
             .unwrap()
             .mut_chunks()
@@ -180,7 +180,7 @@ pub async fn chunked_upload_finish(
     uuid: &str,
 ) -> Result<Json<MochiFile>, io::Error> {
     let now = Utc::now();
-    let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
+    let uuid = Uuid::parse_str(uuid).map_err(io::Error::other)?;
     let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
         Some(s) => s.clone(),
         None => return Err(io::Error::other("Invalid UUID")),
@@ -193,22 +193,22 @@ pub async fn chunked_upload_finish(
         .remove(&uuid)
         .unwrap();
 
-    if !chunked_info.path.try_exists().is_ok_and(|e| e) {
+    if !chunked_info.1.path.try_exists().is_ok_and(|e| e) {
         return Err(io::Error::other("File does not exist"))
     }
 
     // Get file hash
     let mut hasher = blake3::Hasher::new();
-    hasher.update_mmap_rayon(&chunked_info.path).unwrap();
+    hasher.update_mmap_rayon(&chunked_info.1.path).unwrap();
     let hash = hasher.finalize();
     let new_filename = settings.file_dir.join(hash.to_string());
 
     // If the hash does not exist in the database,
     // move the file to the backend, else, delete it
     if main_db.read().unwrap().get_hash(&hash).is_none() {
-        std::fs::rename(&chunked_info.path, &new_filename).unwrap();
+        std::fs::rename(&chunked_info.1.path, &new_filename).unwrap();
     } else {
-        std::fs::remove_file(&chunked_info.path).unwrap();
+        std::fs::remove_file(&chunked_info.1.path).unwrap();
     }
 
     let mmid = Mmid::new_random();
@@ -216,11 +216,11 @@ pub async fn chunked_upload_finish(
 
     let constructed_file = MochiFile::new(
         mmid.clone(),
-        chunked_info.name,
+        chunked_info.1.name,
         file_type.media_type().to_string(),
         hash,
         now,
-        now + chunked_info.expire_duration
+        now + chunked_info.1.expire_duration
     );
 
     main_db.write().unwrap().insert(&mmid, constructed_file.clone());

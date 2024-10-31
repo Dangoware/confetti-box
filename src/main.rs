@@ -1,16 +1,15 @@
 use std::{
-    fs,
-    sync::{Arc, RwLock},
+    fs, path::PathBuf, sync::{Arc, RwLock}
 };
 
 use chrono::TimeDelta;
 use confetti_box::{
-    database::{clean_loop, Chunkbase, Mochibase},
+    database::{clean_database, Chunkbase, Mochibase},
     endpoints, pages, resources,
     settings::Settings,
 };
 use log::info;
-use rocket::{data::ToByteUnit as _, routes, tokio};
+use rocket::{data::ToByteUnit as _, routes, tokio::{self, select, sync::broadcast::Receiver, time}};
 
 #[rocket::main]
 async fn main() {
@@ -45,12 +44,18 @@ async fn main() {
     let local_db = database.clone();
     let local_chunk = chunkbase.clone();
 
-    // Start monitoring thread, cleaning the database every 2 minutes
-    let (shutdown, rx) = tokio::sync::mpsc::channel(1);
+    let (shutdown, rx) = tokio::sync::broadcast::channel(1);
+    // Clean the database every 2 minutes
     tokio::spawn({
         let cleaner_db = database.clone();
         let file_path = config.file_dir.clone();
-        async move { clean_loop(cleaner_db, file_path, rx, TimeDelta::minutes(2)).await }
+        async move { clean_loop(cleaner_db, file_path, rx).await }
+    });
+    tokio::spawn({
+        let cleaner_db = database.clone();
+        let file_path = config.file_dir.clone();
+        let rx2 = shutdown.subscribe();
+        async move { clean_loop(cleaner_db, file_path, rx2).await }
     });
 
     let rocket = rocket::build()
@@ -92,7 +97,6 @@ async fn main() {
     info!("Stopping database cleaning thread...");
     shutdown
         .send(())
-        .await
         .expect("Failed to stop cleaner thread.");
     info!("Stopping database cleaning thread completed successfully.");
 
@@ -111,4 +115,33 @@ async fn main() {
         .delete_all()
         .expect("Failed to delete chunks");
     info!("Deleting chunk data completed successfully.");
+}
+
+/// A loop to clean the database periodically.
+pub async fn clean_loop(
+    main_db: Arc<RwLock<Mochibase>>,
+    file_path: PathBuf,
+    mut shutdown_signal: Receiver<()>,
+) {
+    let mut interval = time::interval(TimeDelta::minutes(2).to_std().unwrap());
+    loop {
+        select! {
+            _ = interval.tick() => clean_database(&main_db, &file_path),
+            _ = shutdown_signal.recv() => break,
+        };
+    }
+}
+
+pub async fn clean_chunks(
+    chunk_db: Arc<RwLock<Chunkbase>>,
+    mut shutdown_signal: Receiver<()>,
+) {
+    let mut interval = time::interval(TimeDelta::seconds(30).to_std().unwrap());
+
+    loop {
+        select! {
+            _ = interval.tick() => {let _ = chunk_db.write().unwrap().delete_timed_out();},
+            _ = shutdown_signal.recv() => break,
+        };
+    }
 }

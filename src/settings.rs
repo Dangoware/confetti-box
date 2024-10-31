@@ -87,11 +87,11 @@ impl Settings {
 
     pub fn save(&self) -> Result<(), io::Error> {
         let out_path = &self.path.with_extension("new");
-        let mut file = File::create(&out_path)?;
+        let mut file = File::create(out_path)?;
         file.write_all(&toml::to_string_pretty(self).unwrap().into_bytes())?;
 
         // Overwrite the original DB with
-        fs::rename(&out_path, &self.path).unwrap();
+        fs::rename(out_path, &self.path).unwrap();
 
         Ok(())
     }
