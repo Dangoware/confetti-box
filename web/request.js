@@ -59,6 +59,7 @@ async function pasteSubmit(evt) {
 
 async function sendFile(files, duration, maxSize) {
     for (const file of files) {
+        const [linkRow, progressBar, progressText] = await addNewToList(file.name);
         if (file.size > maxSize) {
             console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
             continue;
@@ -67,6 +68,7 @@ async function sendFile(files, duration, maxSize) {
             continue;
         }
 
+        // Get preliminary upload information
         let chunkedResponse;
         try {
             const response = await fetch("/upload/chunked", {
@@ -86,19 +88,119 @@ async function sendFile(files, duration, maxSize) {
         }
 
         // Upload the file in `chunk_size` chunks
+        let uploadArray = [];
+        const progressValues = [];
         for (let start = 0; start < file.size; start += chunkedResponse.chunk_size) {
             const chunk = file.slice(start, start + chunkedResponse.chunk_size)
+            const url = "/upload/chunked?uuid=" + chunkedResponse.uuid + "&offset=" + start;
+            const ID = progressValues.push(0);
 
-            await fetch("/upload/chunked?uuid=" + chunkedResponse.uuid, { method: 'post', body: chunk }).then(res => res.text())
+            let upload = new Promise(function (resolve, reject) {
+                let request = new XMLHttpRequest();
+                request.open("POST", url, true);
+                request.upload.addEventListener('progress',
+                    (p) => {uploadProgress(p, progressBar, progressText, progressValues, file.size, ID);}, true
+                );
+
+                request.onload = () => {
+                    if (this.status >= 200 && this.status < 300) {
+                        resolve(request.response);
+                    } else {
+                        reject({status: this.status, statusText: request.statusText});
+                    }
+                };
+                request.onerror = () => reject({status: this.status, statusText: request.statusText});
+                request.send(chunk);
+            });
+
+            uploadArray.push(upload);
         }
+        console.log("Waiting for multiple uploads to complete");
+        console.log(await Promise.allSettled(uploadArray));
 
-        console.log(await fetch("/upload/chunked?uuid=" + chunkedResponse.uuid + "&finish", { method: 'post' }).then(res => res.json()))
+        // Finish the request and update the progress box
+        const result = await fetch("/upload/chunked?uuid=" + chunkedResponse.uuid + "&finish");
+        uploadComplete(result, progressBar, progressText, linkRow);
     }
 }
 
-function networkErrorHandler(err, progressBar, progressText, linkRow) {
-    makeErrored(progressBar, progressText, linkRow, "A network error occured");
-    console.error("A network error occured while uploading", err);
+async function addNewToList(origFileName) {
+    const uploadedFilesDisplay = document.getElementById("uploadedFilesDisplay");
+    const linkRow = uploadedFilesDisplay.appendChild(document.createElement("div"));
+    const fileName = linkRow.appendChild(document.createElement("p"));
+    const progressBar = linkRow.appendChild(document.createElement("progress"));
+    const progressTxt = linkRow.appendChild(document.createElement("p"));
+
+    fileName.textContent = origFileName;
+    fileName.classList.add("file_name");
+    progressTxt.classList.add("status");
+    progressBar.max="100";
+    progressBar.value="0";
+
+    return [linkRow, progressBar, progressTxt];
+}
+
+const sumValues = obj => Object.values(obj).reduce((a, b) => a + b, 0);
+
+function uploadProgress(progress, progressBar, progressText, progressValues, fileSize, ID) {
+    if (progress.lengthComputable) {
+        progressValues[ID] = progress.loaded;
+
+        const progressPercent = Math.floor((sumValues(progressValues) / fileSize) * 100);
+        if (progressPercent == 100) {
+            progressBar.removeAttribute("value");
+            progressText.textContent = "⏳";
+        } else {
+            progressBar.value = progressPercent;
+            progressText.textContent = progressPercent + "%";
+        }
+    }
+}
+
+async function uploadComplete(response, progressBar, progressText, linkRow) {
+    if (response.status === 200) {
+        const responseJson = await response.json();
+        console.log("Successfully uploaded file", responseJson);
+        makeFinished(progressBar, progressText, linkRow, responseJson);
+    } else if (response.status === 413) {
+        makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
+    } else {
+        makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
+    }
+}
+
+function makeErrored(progressBar, progressText, linkRow, errorMessage) {
+    progressText.textContent = errorMessage;
+    progressBar.style.display = "none";
+    linkRow.classList.add("upload_failed");
+}
+
+function makeFinished(progressBar, progressText, linkRow, response) {
+    progressText.textContent = "";
+    const link = progressText.appendChild(document.createElement("a"));
+    link.textContent = response.mmid;
+    link.href = "/f/" + response.mmid;
+    link.target = "_blank";
+
+    let button = linkRow.appendChild(document.createElement("button"));
+    button.textContent = "📝";
+    let buttonTimeout = null;
+    button.addEventListener('click', function(_e) {
+        const mmid = response.mmid;
+        if (buttonTimeout) {
+            clearTimeout(buttonTimeout);
+        }
+        navigator.clipboard.writeText(
+                window.location.protocol + "//" + window.location.host + "/f/" + mmid
+        );
+        button.textContent = "✅";
+        buttonTimeout = setTimeout(function() {
+            button.textContent = "📝";
+        }, 750);
+    });
+
+    progressBar.style.display = "none";
+    linkRow.classList.add("upload_done");
 }
 
 async function initEverything() {

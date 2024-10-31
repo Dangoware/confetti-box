@@ -203,7 +203,7 @@ impl ChunkedResponse {
 
 /// Start a chunked upload. Response contains all the info you need to continue
 /// uploading chunks.
-#[post("/upload/chunked", data = "<file_info>")]
+#[post("/upload/chunked", data = "<file_info>", rank = 1)]
 pub async fn chunked_upload_start(
     db: &State<Arc<RwLock<Chunkbase>>>,
     settings: &State<Settings>,
@@ -238,11 +238,12 @@ pub async fn chunked_upload_start(
     }))
 }
 
-#[post("/upload/chunked?<uuid>", data = "<data>")]
+#[post("/upload/chunked?<uuid>&<offset>", data = "<data>")]
 pub async fn chunked_upload_continue(
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
     data: Data<'_>,
     uuid: String,
+    offset: u64,
 ) -> Result<(), io::Error> {
     let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
     let data_stream = data.open(101.megabytes());
@@ -263,7 +264,7 @@ pub async fn chunked_upload_continue(
             .await?
     };
 
-    file.seek(io::SeekFrom::Start(chunked_info.offset)).await?;
+    file.seek(io::SeekFrom::Start(offset)).await?;
     data_stream.stream_to(&mut file).await?.written;
     file.flush().await?;
     let position = file.stream_position().await?;
@@ -276,18 +277,11 @@ pub async fn chunked_upload_continue(
         return Err(io::Error::other("File larger than expected"))
     }
 
-    chunk_db.write()
-        .unwrap()
-        .mut_chunks()
-        .get_mut(&uuid)
-        .unwrap()
-        .offset = position;
-
     Ok(())
 }
 
 /// Finalize a chunked upload
-#[post("/upload/chunked?<uuid>&finish")]
+#[get("/upload/chunked?<uuid>&finish")]
 pub async fn chunked_upload_finish(
     main_db: &State<Arc<RwLock<Mochibase>>>,
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
