@@ -83,9 +83,11 @@ async function uploadFile(file, duration, maxSize) {
     const [linkRow, progressBar, progressText] = await addNewToList(file.name);
     if (file.size > maxSize) {
         console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
+        makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
         return;
     } else if (file.size == 0) {
         console.error("Provided file has 0 bytes");
+        makeErrored(progressBar, progressText, linkRow, ZERO_TEXT);
         return;
     }
 
@@ -106,6 +108,7 @@ async function uploadFile(file, duration, maxSize) {
         chunkedResponse = await response.json();
     } catch (error) {
         console.error(error);
+        makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);
     }
 
     // Upload the file in `chunk_size` chunks
