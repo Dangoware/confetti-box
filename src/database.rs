@@ -28,17 +28,16 @@ pub struct Mochibase {
 
     /// All entries in the database
     entries: HashMap<Mmid, MochiFile>,
-
-    chunks: HashMap<Uuid, DateTime<Utc>>,
 }
 
 impl Mochibase {
+    /// Create a new database initialized with no data, and save it to the
+    /// provided path
     pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
         let output = Self {
             path: path.as_ref().to_path_buf(),
             entries: HashMap::new(),
             hashes: HashMap::new(),
-            chunks: HashMap::new(),
         };
 
         // Save the database initially after creating it
@@ -354,4 +353,36 @@ impl<'r> FromFormField<'r> for Mmid {
             Self::try_from(field.value).map_err(|_| form::Error::validation("Invalid MMID"))?
         )
     }
+}
+
+/// An in-memory database for partially uploaded chunks of files
+#[derive(Default, Debug)]
+pub struct Chunkbase {
+    chunks: HashMap<Uuid, ChunkedInfo>,
+}
+
+impl Chunkbase {
+    pub fn chunks(&self) -> &HashMap<Uuid, ChunkedInfo> {
+        &self.chunks
+    }
+
+    pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, ChunkedInfo> {
+        &mut self.chunks
+    }
+}
+
+/// Information about how to manage partially uploaded chunks of files
+#[serde_as]
+#[derive(Default, Debug, Clone)]
+#[derive(Deserialize, Serialize)]
+pub struct ChunkedInfo {
+    pub name: String,
+    pub size: u64,
+    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
+    pub expire_duration: TimeDelta,
+
+    #[serde(skip)]
+    pub path: PathBuf,
+    #[serde(skip)]
+    pub offset: u64,
 }

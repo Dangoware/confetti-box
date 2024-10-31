@@ -6,20 +6,20 @@ pub mod settings;
 pub mod strings;
 pub mod utils;
 
-use std::sync::{Arc, RwLock};
+use std::{io, sync::{Arc, RwLock}};
 
 use crate::{
-    database::{Mmid, MochiFile, Mochibase},
     pages::{footer, head},
     settings::Settings,
-    strings::{parse_time_string, to_pretty_time},
-    utils::hash_file,
+    strings::to_pretty_time,
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
+use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit, form::Form, fs::TempFile, get, post, serde::{json::Json, Serialize}, FromForm, State
+    data::{ByteUnit, ToByteUnit}, get, post, serde::{json::Json, Serialize}, tokio::{fs, io::{AsyncSeekExt, AsyncWriteExt}}, Data, State
 };
+use utils::hash_file;
 use uuid::Uuid;
 
 #[get("/")]
@@ -49,7 +49,7 @@ pub fn home(settings: &State<Settings>) -> Markup {
             form #uploadForm {
                 // It's stupid how these can't be styled so they're just hidden here...
                 input #fileDuration type="text" name="duration" minlength="2"
-                maxlength="7" value=(settings.duration.default.num_seconds().to_string() + "s") style="display:none;";
+                maxlength="7" value=(settings.duration.default.num_seconds().to_string()) style="display:none;";
                 input #fileInput type="file" name="fileUpload" multiple
                 onchange="formSubmit(this.parentNode)" data-max-filesize=(settings.max_filesize) style="display:none;";
             }
@@ -66,11 +66,9 @@ pub fn home(settings: &State<Settings>) -> Markup {
     }
 }
 
+/*
 #[derive(Debug, FromForm)]
 pub struct Upload<'r> {
-    #[field(name = "duration")]
-    expire_time: String,
-
     #[field(name = "fileUpload")]
     file: TempFile<'r>,
 }
@@ -104,15 +102,16 @@ impl ClientResponse {
 }
 
 /// Handle a file upload and store it
-#[post("/upload", data = "<file_data>")]
+#[post("/upload?<expire_time>", data = "<file_data>")]
 pub async fn handle_upload(
+    expire_time: String,
     mut file_data: Form<Upload<'_>>,
     db: &State<Arc<RwLock<Mochibase>>>,
     settings: &State<Settings>,
 ) -> Result<Json<ClientResponse>, std::io::Error> {
     let current = Utc::now();
     // Ensure the expiry time is valid, if not return an error
-    let expire_time = if let Ok(t) = parse_time_string(&file_data.expire_time) {
+    let expire_time = if let Ok(t) = parse_time_string(&expire_time) {
         if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
             return Ok(Json(ClientResponse::failure("Duration not allowed")));
         }
@@ -176,29 +175,165 @@ pub async fn handle_upload(
         ..Default::default()
     }))
 }
+*/
 
+#[derive(Serialize, Default)]
 pub struct ChunkedResponse {
+    status: bool,
+    message: String,
+
     /// UUID used for associating the chunk with the final file
-    uuid: Uuid,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    uuid: Option<Uuid>,
 
     /// Valid max chunk size in bytes
-    chunk_size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunk_size: Option<ByteUnit>,
+}
 
-    /// The datetime at which the upload will be invalidated unless new
-    /// chunks have come in
-    timeout: DateTime<Utc>,
-
-    /// The datetime at which the upload will be invalidated even if new
-    /// chunks have come in
-    hard_timeout: DateTime<Utc>,
+impl ChunkedResponse {
+    fn failure(message: &str) -> Self {
+        Self {
+            status: false,
+            message: message.to_string(),
+            ..Default::default()
+        }
+    }
 }
 
 /// Start a chunked upload. Response contains all the info you need to continue
 /// uploading chunks.
-#[get("/upload/chunked")]
-pub async fn chunked_start() -> Result<Json<ClientResponse>, std::io::Error> {
+#[post("/upload/chunked", data = "<file_info>")]
+pub async fn chunked_upload_start(
+    db: &State<Arc<RwLock<Chunkbase>>>,
+    settings: &State<Settings>,
+    mut file_info: Json<ChunkedInfo>,
+) -> Result<Json<ChunkedResponse>, std::io::Error> {
+    let uuid = Uuid::new_v4();
+    file_info.path = settings
+        .temp_dir
+        .join(uuid.to_string());
 
+    // Perform some sanity checks
+    if file_info.size > settings.max_filesize {
+        return Ok(Json(ChunkedResponse::failure("File too large")));
+    }
+    if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&file_info.expire_duration) {
+        return Ok(Json(ChunkedResponse::failure("Duration not allowed")));
+    }
+    if file_info.expire_duration > settings.duration.maximum {
+        return Ok(Json(ChunkedResponse::failure("Duration too large")));
+    }
 
+    db.write()
+        .unwrap()
+        .mut_chunks()
+        .insert(uuid, file_info.into_inner());
 
-    todo!()
+    Ok(Json(ChunkedResponse {
+        status: true,
+        message: "".into(),
+        uuid: Some(uuid),
+        chunk_size: Some(100.megabytes()),
+    }))
+}
+
+#[post("/upload/chunked?<uuid>", data = "<data>")]
+pub async fn chunked_upload_continue(
+    chunk_db: &State<Arc<RwLock<Chunkbase>>>,
+    data: Data<'_>,
+    uuid: String,
+) -> Result<(), io::Error> {
+    let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
+    let data_stream = data.open(101.megabytes());
+
+    let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
+        Some(s) => s.clone(),
+        None => return Err(io::Error::other("Invalid UUID")),
+    };
+
+    let mut file = if !chunked_info.path.try_exists().is_ok_and(|e| e) {
+        fs::File::create_new(&chunked_info.path).await?
+    } else {
+        fs::File::options()
+            .read(true)
+            .write(true)
+            .truncate(false)
+            .open(&chunked_info.path)
+            .await?
+    };
+
+    file.seek(io::SeekFrom::Start(chunked_info.offset)).await?;
+    data_stream.stream_to(&mut file).await?.written;
+    file.flush().await?;
+    let position = file.stream_position().await?;
+
+    if position > chunked_info.size {
+        chunk_db.write()
+            .unwrap()
+            .mut_chunks()
+            .remove(&uuid);
+        return Err(io::Error::other("File larger than expected"))
+    }
+
+    chunk_db.write()
+        .unwrap()
+        .mut_chunks()
+        .get_mut(&uuid)
+        .unwrap()
+        .offset = position;
+
+    Ok(())
+}
+
+/// Finalize a chunked upload
+#[post("/upload/chunked?<uuid>&finish")]
+pub async fn chunked_upload_finish(
+    main_db: &State<Arc<RwLock<Mochibase>>>,
+    chunk_db: &State<Arc<RwLock<Chunkbase>>>,
+    settings: &State<Settings>,
+    uuid: String,
+) -> Result<Json<MochiFile>, io::Error> {
+    let now = Utc::now();
+    let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
+    let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
+        Some(s) => s.clone(),
+        None => return Err(io::Error::other("Invalid UUID")),
+    };
+
+    // Remove the finished chunk from the db
+    chunk_db.write()
+        .unwrap()
+        .mut_chunks()
+        .remove(&uuid)
+        .unwrap();
+
+    if !chunked_info.path.try_exists().is_ok_and(|e| e) {
+        return Err(io::Error::other("File does not exist"))
+    }
+
+    let hash = hash_file(&chunked_info.path).await?;
+    let mmid = Mmid::new_random();
+    let file_type = file_format::FileFormat::from_file(&chunked_info.path)?;
+
+    // If the hash does not exist in the database,
+    // move the file to the backend, else, delete it
+    if main_db.read().unwrap().get_hash(&hash).is_none() {
+        std::fs::rename(chunked_info.path, settings.file_dir.join(hash.to_string()))?;
+    } else {
+        std::fs::remove_file(chunked_info.path)?;
+    }
+
+    let constructed_file = MochiFile::new(
+        mmid.clone(),
+        chunked_info.name,
+        file_type.media_type().to_string(),
+        hash,
+        now,
+        now + chunked_info.expire_duration
+    );
+
+    main_db.write().unwrap().insert(&mmid, constructed_file.clone());
+
+    Ok(Json(constructed_file))
 }

@@ -5,7 +5,7 @@ use std::{
 
 use chrono::TimeDelta;
 use confetti_box::{
-    database::{clean_loop, Mochibase},
+    database::{clean_loop, Chunkbase, Mochibase},
     endpoints, pages, resources,
     settings::Settings,
 };
@@ -39,6 +39,9 @@ async fn main() {
     let database = Arc::new(RwLock::new(
         Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database"),
     ));
+    let chunkbase = Arc::new(RwLock::new(
+        Chunkbase::default(),
+    ));
     let local_db = database.clone();
 
     // Start monitoring thread, cleaning the database every 2 minutes
@@ -65,7 +68,9 @@ async fn main() {
         .mount(
             config.server.root_path.clone() + "/",
             routes![
-                confetti_box::handle_upload,
+                confetti_box::chunked_upload_start,
+                confetti_box::chunked_upload_continue,
+                confetti_box::chunked_upload_finish,
                 endpoints::server_info,
                 endpoints::file_info,
                 endpoints::lookup_mmid,
@@ -74,6 +79,7 @@ async fn main() {
             ],
         )
         .manage(database)
+        .manage(chunkbase)
         .manage(config)
         .configure(rocket_config)
         .launch()
