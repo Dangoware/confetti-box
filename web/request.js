@@ -10,7 +10,7 @@ async function formSubmit() {
     const duration = form.elements.duration.value;
     const maxSize = form.elements.fileUpload.dataset.maxFilesize;
 
-    await sendFile(files, duration, maxSize);
+    await sendFiles(files, duration, maxSize);
 
     // Reset the form file data since we've successfully submitted it
     form.elements.fileUpload.value = "";
@@ -39,7 +39,7 @@ async function dragDropSubmit(evt) {
         });
     }
 
-    await sendFile(files, duration, maxSize);
+    await sendFiles(files, duration, maxSize);
 }
 
 async function pasteSubmit(evt) {
@@ -54,74 +54,92 @@ async function pasteSubmit(evt) {
         files.push(file);
     }
 
-    await sendFile(files, duration, maxSize);
+    await sendFiles(files, duration, maxSize);
 }
 
-async function sendFile(files, duration, maxSize) {
+async function sendFiles(files, duration, maxSize) {
+    const uploadArray = [];
+    const concurrencyLimit = 10;
+
     for (const file of files) {
-        const [linkRow, progressBar, progressText] = await addNewToList(file.name);
-        if (file.size > maxSize) {
-            console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
-            continue;
-        } else if (file.size == 0) {
-            console.error("Provided file has 0 bytes");
-            continue;
+        // Add each upload to the array
+        uploadArray.push(uploadFile(file, duration, maxSize));
+
+        // If the number of uploads reaches the concurrency limit, wait for them to finish
+        if (uploadArray.length >= concurrencyLimit) {
+            await Promise.allSettled(uploadArray);
+            uploadArray.length = 0; // Clear the array after each batch
         }
-
-        // Get preliminary upload information
-        let chunkedResponse;
-        try {
-            const response = await fetch("/upload/chunked", {
-                method: "POST",
-                body: JSON.stringify({
-                    "name": file.name,
-                    "size": file.size,
-                    "expire_duration": parseInt(duration),
-                }),
-            });
-            if (!response.ok) {
-                throw new Error(`Response status: ${response.status}`);
-            }
-            chunkedResponse = await response.json();
-        } catch (error) {
-            console.error(error);
-        }
-
-        // Upload the file in `chunk_size` chunks
-        let uploadArray = [];
-        const progressValues = [];
-        for (let start = 0; start < file.size; start += chunkedResponse.chunk_size) {
-            const chunk = file.slice(start, start + chunkedResponse.chunk_size)
-            const url = "/upload/chunked?uuid=" + chunkedResponse.uuid + "&offset=" + start;
-            const ID = progressValues.push(0);
-
-            let upload = new Promise(function (resolve, reject) {
-                let request = new XMLHttpRequest();
-                request.open("POST", url, true);
-                request.upload.addEventListener('progress',
-                    (p) => {uploadProgress(p, progressBar, progressText, progressValues, file.size, ID);}, true
-                );
-
-                request.onload = () => {
-                    if (this.status >= 200 && this.status < 300) {
-                        resolve(request.response);
-                    } else {
-                        reject({status: this.status, statusText: request.statusText});
-                    }
-                };
-                request.onerror = () => reject({status: this.status, statusText: request.statusText});
-                request.send(chunk);
-            });
-
-            uploadArray.push(upload);
-        }
-        console.log("Waiting for multiple uploads to complete");
-        console.log(await Promise.allSettled(uploadArray));
-
-        // Finish the request and update the progress box
-        const result = await fetch("/upload/chunked?uuid=" + chunkedResponse.uuid + "&finish");
-        uploadComplete(result, progressBar, progressText, linkRow);
     }
+
+    // Final batch to handle any remaining files
+    if (uploadArray.length > 0) {
+        await Promise.allSettled(uploadArray);
+    }
+}
+
+async function uploadFile(file, duration, maxSize) {
+    const [linkRow, progressBar, progressText] = await addNewToList(file.name);
+    if (file.size > maxSize) {
+        console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
+        return;
+    } else if (file.size == 0) {
+        console.error("Provided file has 0 bytes");
+        return;
+    }
+
+    // Get preliminary upload information
+    let chunkedResponse;
+    try {
+        const response = await fetch("/upload/chunked", {
+            method: "POST",
+            body: JSON.stringify({
+                "name": file.name,
+                "size": file.size,
+                "expire_duration": parseInt(duration),
+            }),
+        });
+        if (!response.ok) {
+            throw new Error(`Response status: ${response.status}`);
+        }
+        chunkedResponse = await response.json();
+    } catch (error) {
+        console.error(error);
+    }
+
+    // Upload the file in `chunk_size` chunks
+    const chunkUploadArray = [];
+    const progressValues = [];
+    for (let start = 0; start < file.size; start += chunkedResponse.chunk_size) {
+        const chunk = file.slice(start, start + chunkedResponse.chunk_size)
+        const url = "/upload/chunked?uuid=" + chunkedResponse.uuid + "&offset=" + start;
+        const ID = progressValues.push(0);
+
+        let upload = new Promise(function (resolve, reject) {
+            let request = new XMLHttpRequest();
+            request.open("POST", url, true);
+            request.upload.addEventListener('progress',
+                (p) => {uploadProgress(p, progressBar, progressText, progressValues, file.size, ID);}, true
+            );
+
+            request.onload = () => {
+                if (this.status >= 200 && this.status < 300) {
+                    resolve(request.response);
+                } else {
+                    reject({status: this.status, statusText: request.statusText});
+                }
+            };
+            request.onerror = () => reject({status: this.status, statusText: request.statusText});
+            request.send(chunk);
+        });
+
+        chunkUploadArray.push(upload);
+    }
+    await Promise.allSettled(chunkUploadArray);
+
+    // Finish the request and update the progress box
+    const result = await fetch("/upload/chunked?uuid=" + chunkedResponse.uuid + "&finish");
+    uploadComplete(result, progressBar, progressText, linkRow);
 }
 
 async function addNewToList(origFileName) {
@@ -140,13 +158,11 @@ async function addNewToList(origFileName) {
     return [linkRow, progressBar, progressTxt];
 }
 
-const sumValues = obj => Object.values(obj).reduce((a, b) => a + b, 0);
-
 function uploadProgress(progress, progressBar, progressText, progressValues, fileSize, ID) {
     if (progress.lengthComputable) {
         progressValues[ID] = progress.loaded;
 
-        const progressPercent = Math.floor((sumValues(progressValues) / fileSize) * 100);
+        const progressPercent = Math.floor((progressValues.reduce((a, b) => a + b, 0) / fileSize) * 100);
         if (progressPercent == 100) {
             progressBar.removeAttribute("value");
             progressText.textContent = "⏳";
