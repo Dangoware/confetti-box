@@ -43,6 +43,7 @@ async fn main() {
         Chunkbase::default(),
     ));
     let local_db = database.clone();
+    let local_chunk = chunkbase.clone();
 
     // Start monitoring thread, cleaning the database every 2 minutes
     let (shutdown, rx) = tokio::sync::mpsc::channel(1);
@@ -102,4 +103,12 @@ async fn main() {
         .save()
         .expect("Failed to save database");
     info!("Saving database completed successfully.");
+
+    info!("Deleting chunk data on shutdown...");
+    local_chunk
+        .write()
+        .unwrap()
+        .delete_all()
+        .expect("Failed to delete chunks");
+    info!("Deleting chunk data completed successfully.");
 }

@@ -17,9 +17,8 @@ use chrono::Utc;
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::{ByteUnit, ToByteUnit}, get, post, serde::{json::Json, Serialize}, tokio::{fs, io::{AsyncSeekExt, AsyncWriteExt}}, Data, State
+    data::ToByteUnit, get, post, serde::{json::Json, Serialize}, tokio::{fs, io::{AsyncSeekExt, AsyncWriteExt}}, Data, State
 };
-use utils::hash_file;
 use uuid::Uuid;
 
 #[get("/")]
@@ -66,117 +65,6 @@ pub fn home(settings: &State<Settings>) -> Markup {
     }
 }
 
-/*
-#[derive(Debug, FromForm)]
-pub struct Upload<'r> {
-    #[field(name = "fileUpload")]
-    file: TempFile<'r>,
-}
-
-/// A response to the client from the server
-#[derive(Serialize, Default, Debug)]
-pub struct ClientResponse {
-    /// Success or failure
-    pub status: bool,
-
-    pub response: &'static str,
-
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub mmid: Option<Mmid>,
-    #[serde(skip_serializing_if = "str::is_empty")]
-    pub hash: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub expires: Option<DateTime<Utc>>,
-}
-
-impl ClientResponse {
-    fn failure(response: &'static str) -> Self {
-        Self {
-            status: false,
-            response,
-            ..Default::default()
-        }
-    }
-}
-
-/// Handle a file upload and store it
-#[post("/upload?<expire_time>", data = "<file_data>")]
-pub async fn handle_upload(
-    expire_time: String,
-    mut file_data: Form<Upload<'_>>,
-    db: &State<Arc<RwLock<Mochibase>>>,
-    settings: &State<Settings>,
-) -> Result<Json<ClientResponse>, std::io::Error> {
-    let current = Utc::now();
-    // Ensure the expiry time is valid, if not return an error
-    let expire_time = if let Ok(t) = parse_time_string(&expire_time) {
-        if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&t) {
-            return Ok(Json(ClientResponse::failure("Duration not allowed")));
-        }
-
-        if t > settings.duration.maximum {
-            return Ok(Json(ClientResponse::failure("Duration larger than max")));
-        }
-
-        t
-    } else {
-        return Ok(Json(ClientResponse::failure("Duration invalid")));
-    };
-
-    let raw_name = file_data
-        .file
-        .raw_name()
-        .unwrap()
-        .dangerous_unsafe_unsanitized_raw()
-        .as_str()
-        .to_string();
-
-    // Get temp path for the file
-    let temp_filename = settings.temp_dir.join(Uuid::new_v4().to_string());
-    file_data.file.persist_to(&temp_filename).await?;
-
-    // Get hash and random identifier and expiry
-    let file_mmid = Mmid::new_random();
-    let file_hash = hash_file(&temp_filename).await?;
-    let expiry = current + expire_time;
-
-    // Process filetype
-    let file_type = file_format::FileFormat::from_file(&temp_filename)?;
-
-    let constructed_file = MochiFile::new(
-        file_mmid.clone(),
-        raw_name,
-        file_type.media_type().to_string(),
-        file_hash,
-        current,
-        expiry,
-    );
-
-    // If the hash does not exist in the database,
-    // move the file to the backend, else, delete it
-    if db.read().unwrap().get_hash(&file_hash).is_none() {
-        std::fs::rename(temp_filename, settings.file_dir.join(file_hash.to_string()))?;
-    } else {
-        std::fs::remove_file(temp_filename)?;
-    }
-
-    db.write()
-        .unwrap()
-        .insert(&file_mmid, constructed_file.clone());
-
-    Ok(Json(ClientResponse {
-        status: true,
-        name: constructed_file.name().clone(),
-        mmid: Some(constructed_file.mmid().clone()),
-        hash: constructed_file.hash().to_string(),
-        expires: Some(constructed_file.expiry()),
-        ..Default::default()
-    }))
-}
-*/
-
 #[derive(Serialize, Default)]
 pub struct ChunkedResponse {
     status: bool,
@@ -188,7 +76,7 @@ pub struct ChunkedResponse {
 
     /// Valid max chunk size in bytes
     #[serde(skip_serializing_if = "Option::is_none")]
-    chunk_size: Option<ByteUnit>,
+    chunk_size: Option<u64>,
 }
 
 impl ChunkedResponse {
@@ -225,6 +113,8 @@ pub async fn chunked_upload_start(
         return Ok(Json(ChunkedResponse::failure("Duration too large")));
     }
 
+    fs::File::create_new(&file_info.path).await?;
+
     db.write()
         .unwrap()
         .mut_chunks()
@@ -234,35 +124,32 @@ pub async fn chunked_upload_start(
         status: true,
         message: "".into(),
         uuid: Some(uuid),
-        chunk_size: Some(100.megabytes()),
+        chunk_size: Some(settings.chunk_size),
     }))
 }
 
 #[post("/upload/chunked/<uuid>?<offset>", data = "<data>")]
 pub async fn chunked_upload_continue(
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
+    settings: &State<Settings>,
     data: Data<'_>,
     uuid: &str,
     offset: u64,
 ) -> Result<(), io::Error> {
     let uuid = Uuid::parse_str(&uuid).map_err(|e| io::Error::other(e))?;
-    let data_stream = data.open(101.megabytes());
+    let data_stream = data.open((settings.chunk_size + 100).bytes());
 
     let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
         Some(s) => s.clone(),
         None => return Err(io::Error::other("Invalid UUID")),
     };
 
-    let mut file = if !chunked_info.path.try_exists().is_ok_and(|e| e) {
-        fs::File::create_new(&chunked_info.path).await?
-    } else {
-        fs::File::options()
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&chunked_info.path)
-            .await?
-    };
+    let mut file = fs::File::options()
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(&chunked_info.path)
+        .await?;
 
     if offset > chunked_info.size {
         return Err(io::Error::new(ErrorKind::InvalidInput, "The seek position is larger than the file size"))
@@ -310,17 +197,22 @@ pub async fn chunked_upload_finish(
         return Err(io::Error::other("File does not exist"))
     }
 
-    let hash = hash_file(&chunked_info.path).await?;
-    let mmid = Mmid::new_random();
-    let file_type = file_format::FileFormat::from_file(&chunked_info.path)?;
+    // Get file hash
+    let mut hasher = blake3::Hasher::new();
+    hasher.update_mmap_rayon(&chunked_info.path).unwrap();
+    let hash = hasher.finalize();
+    let new_filename = settings.file_dir.join(hash.to_string());
 
     // If the hash does not exist in the database,
     // move the file to the backend, else, delete it
     if main_db.read().unwrap().get_hash(&hash).is_none() {
-        std::fs::rename(chunked_info.path, settings.file_dir.join(hash.to_string()))?;
+        std::fs::rename(&chunked_info.path, &new_filename).unwrap();
     } else {
-        std::fs::remove_file(chunked_info.path)?;
+        std::fs::remove_file(&chunked_info.path).unwrap();
     }
+
+    let mmid = Mmid::new_random();
+    let file_type = file_format::FileFormat::from_file(&new_filename).unwrap();
 
     let constructed_file = MochiFile::new(
         mmid.clone(),

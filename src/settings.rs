@@ -17,6 +17,10 @@ pub struct Settings {
     #[serde(default)]
     pub max_filesize: u64,
 
+    /// Maximum filesize in bytes
+    #[serde(default)]
+    pub chunk_size: u64,
+
     /// Is overwiting already uploaded files with the same hash allowed, or is
     /// this a no-op?
     #[serde(default)]
@@ -48,7 +52,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            max_filesize: 1.megabytes().into(), // 1 MB
+            max_filesize: 25.megabytes().into(), // 1 MB
+            chunk_size: 1.megabytes().into(),
             overwrite: true,
             duration: DurationSettings::default(),
             server: ServerSettings::default(),
@@ -81,12 +86,12 @@ impl Settings {
     }
 
     pub fn save(&self) -> Result<(), io::Error> {
-        let mut out_path = self.path.clone();
-        out_path.set_extension(".bkp");
-        let mut file = File::create(&out_path).expect("Could not save!");
+        let out_path = &self.path.with_extension("new");
+        let mut file = File::create(&out_path)?;
         file.write_all(&toml::to_string_pretty(self).unwrap().into_bytes())?;
 
-        fs::rename(out_path, &self.path).unwrap();
+        // Overwrite the original DB with
+        fs::rename(&out_path, &self.path).unwrap();
 
         Ok(())
     }

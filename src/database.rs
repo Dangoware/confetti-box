@@ -369,6 +369,17 @@ impl Chunkbase {
     pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, ChunkedInfo> {
         &mut self.chunks
     }
+
+    /// Delete all temporary chunk files
+    pub fn delete_all(&mut self) -> Result<(), io::Error> {
+        for chunk in &self.chunks {
+            fs::remove_file(&chunk.1.path)?;
+        }
+
+        self.chunks.clear();
+
+        Ok(())
+    }
 }
 
 /// Information about how to manage partially uploaded chunks of files
