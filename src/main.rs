@@ -1,16 +1,21 @@
 use std::{
     fs,
+    path::PathBuf,
     sync::{Arc, RwLock},
 };
 
 use chrono::TimeDelta;
 use confetti_box::{
-    database::{clean_loop, Mochibase},
+    database::{clean_database, Chunkbase, Mochibase},
     endpoints, pages, resources,
     settings::Settings,
 };
 use log::info;
-use rocket::{data::ToByteUnit as _, routes, tokio};
+use rocket::{
+    data::ToByteUnit as _,
+    routes,
+    tokio::{self, select, sync::broadcast::Receiver, time},
+};
 
 #[rocket::main]
 async fn main() {
@@ -39,14 +44,22 @@ async fn main() {
     let database = Arc::new(RwLock::new(
         Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database"),
     ));
+    let chunkbase = Arc::new(RwLock::new(Chunkbase::default()));
     let local_db = database.clone();
+    let local_chunk = chunkbase.clone();
 
-    // Start monitoring thread, cleaning the database every 2 minutes
-    let (shutdown, rx) = tokio::sync::mpsc::channel(1);
+    let (shutdown, rx) = tokio::sync::broadcast::channel(1);
+    // Clean the database every 2 minutes
     tokio::spawn({
         let cleaner_db = database.clone();
         let file_path = config.file_dir.clone();
-        async move { clean_loop(cleaner_db, file_path, rx, TimeDelta::minutes(2)).await }
+        async move { clean_loop(cleaner_db, file_path, rx).await }
+    });
+    tokio::spawn({
+        let cleaner_db = database.clone();
+        let file_path = config.file_dir.clone();
+        let rx2 = shutdown.subscribe();
+        async move { clean_loop(cleaner_db, file_path, rx2).await }
     });
 
     let rocket = rocket::build()
@@ -65,7 +78,9 @@ async fn main() {
         .mount(
             config.server.root_path.clone() + "/",
             routes![
-                confetti_box::handle_upload,
+                confetti_box::chunked_upload_start,
+                confetti_box::chunked_upload_continue,
+                confetti_box::chunked_upload_finish,
                 endpoints::server_info,
                 endpoints::file_info,
                 endpoints::lookup_mmid,
@@ -74,6 +89,7 @@ async fn main() {
             ],
         )
         .manage(database)
+        .manage(chunkbase)
         .manage(config)
         .configure(rocket_config)
         .launch()
@@ -83,10 +99,7 @@ async fn main() {
     rocket.expect("Server failed to shutdown gracefully");
 
     info!("Stopping database cleaning thread...");
-    shutdown
-        .send(())
-        .await
-        .expect("Failed to stop cleaner thread.");
+    shutdown.send(()).expect("Failed to stop cleaner thread.");
     info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
@@ -96,4 +109,38 @@ async fn main() {
         .save()
         .expect("Failed to save database");
     info!("Saving database completed successfully.");
+
+    info!("Deleting chunk data on shutdown...");
+    local_chunk
+        .write()
+        .unwrap()
+        .delete_all()
+        .expect("Failed to delete chunks");
+    info!("Deleting chunk data completed successfully.");
+}
+
+/// A loop to clean the database periodically.
+pub async fn clean_loop(
+    main_db: Arc<RwLock<Mochibase>>,
+    file_path: PathBuf,
+    mut shutdown_signal: Receiver<()>,
+) {
+    let mut interval = time::interval(TimeDelta::minutes(2).to_std().unwrap());
+    loop {
+        select! {
+            _ = interval.tick() => clean_database(&main_db, &file_path),
+            _ = shutdown_signal.recv() => break,
+        };
+    }
+}
+
+pub async fn clean_chunks(chunk_db: Arc<RwLock<Chunkbase>>, mut shutdown_signal: Receiver<()>) {
+    let mut interval = time::interval(TimeDelta::seconds(30).to_std().unwrap());
+
+    loop {
+        select! {
+            _ = interval.tick() => {let _ = chunk_db.write().unwrap().delete_timed_out();},
+            _ = shutdown_signal.recv() => break,
+        };
+    }
 }

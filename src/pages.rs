@@ -11,6 +11,8 @@ pub fn head(page_title: &str) -> Markup {
         title { (page_title) }
         link rel="icon" type="image/svg+xml" href="/resources/favicon.svg";
         link rel="stylesheet" href="/resources/main.css";
+        link rel="preload" href="/resources/fonts/Roboto.woff2" as="font" type="font/woff2" crossorigin;
+        link rel="preload" href="/resources/fonts/FiraCode.woff2" as="font" type="font/woff2" crossorigin;
     }
 }
 

@@ -7,33 +7,32 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bincode::{config::Configuration, decode_from_std_read, encode_into_std_write, Decode, Encode};
 use blake3::Hash;
 use chrono::{DateTime, TimeDelta, Utc};
+use ciborium::{from_reader, into_writer};
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
+    form::{self, FromFormField, ValueField},
     serde::{Deserialize, Serialize},
-    tokio::{select, sync::mpsc::Receiver, time},
 };
 use serde_with::{serde_as, DisplayFromStr};
+use uuid::Uuid;
 
-const BINCODE_CFG: Configuration = bincode::config::standard();
-
-#[derive(Debug, Clone, Decode, Encode)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mochibase {
     path: PathBuf,
 
     /// Every hash in the database along with the [`Mmid`]s associated with them
-    #[bincode(with_serde)]
     hashes: HashMap<Hash, HashSet<Mmid>>,
 
     /// All entries in the database
-    #[bincode(with_serde)]
     entries: HashMap<Mmid, MochiFile>,
 }
 
 impl Mochibase {
+    /// Create a new database initialized with no data, and save it to the
+    /// provided path
     pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
         let output = Self {
             path: path.as_ref().to_path_buf(),
@@ -52,7 +51,7 @@ impl Mochibase {
         let file = File::open(path)?;
         let mut lz4_file = lz4_flex::frame::FrameDecoder::new(file);
 
-        decode_from_std_read(&mut lz4_file, BINCODE_CFG)
+        from_reader(&mut lz4_file)
             .map_err(|e| io::Error::other(format!("failed to open database: {e}")))
     }
 
@@ -70,7 +69,7 @@ impl Mochibase {
         // Create a file and write the LZ4 compressed stream into it
         let file = File::create(self.path.with_extension("bkp"))?;
         let mut lz4_file = lz4_flex::frame::FrameEncoder::new(file);
-        encode_into_std_write(self, &mut lz4_file, BINCODE_CFG)
+        into_writer(self, &mut lz4_file)
             .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
         lz4_file.try_finish()?;
 
@@ -154,7 +153,7 @@ impl Mochibase {
 
 /// An entry in the database storing metadata about a file
 #[serde_as]
-#[derive(Debug, Clone, Decode, Encode, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MochiFile {
     /// A unique identifier describing this file
     mmid: Mmid,
@@ -166,16 +165,13 @@ pub struct MochiFile {
     mime_type: String,
 
     /// The Blake3 hash of the file
-    #[bincode(with_serde)]
     #[serde_as(as = "DisplayFromStr")]
     hash: Hash,
 
     /// The datetime when the file was uploaded
-    #[bincode(with_serde)]
     upload_datetime: DateTime<Utc>,
 
     /// The datetime when the file is set to expire
-    #[bincode(with_serde)]
     expiry_datetime: DateTime<Utc>,
 }
 
@@ -227,7 +223,7 @@ impl MochiFile {
 
 /// Clean the database. Removes files which are past their expiry
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
-fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
+pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     let mut database = db.write().unwrap();
 
     // Add expired entries to the removal list
@@ -266,26 +262,9 @@ fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     drop(database); // Just to be sure
 }
 
-/// A loop to clean the database periodically.
-pub async fn clean_loop(
-    db: Arc<RwLock<Mochibase>>,
-    file_path: PathBuf,
-    mut shutdown_signal: Receiver<()>,
-    interval: TimeDelta,
-) {
-    let mut interval = time::interval(interval.to_std().unwrap());
-
-    loop {
-        select! {
-            _ = interval.tick() => clean_database(&db, &file_path),
-            _ = shutdown_signal.recv() => break,
-        };
-    }
-}
-
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Decode, Encode, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
@@ -346,4 +325,67 @@ impl std::fmt::Display for Mmid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[rocket::async_trait]
+impl<'r> FromFormField<'r> for Mmid {
+    fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
+        Ok(Self::try_from(field.value).map_err(|_| form::Error::validation("Invalid MMID"))?)
+    }
+}
+
+/// An in-memory database for partially uploaded chunks of files
+#[derive(Default, Debug)]
+pub struct Chunkbase {
+    chunks: HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)>,
+}
+
+impl Chunkbase {
+    pub fn chunks(&self) -> &HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
+        &self.chunks
+    }
+
+    pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
+        &mut self.chunks
+    }
+
+    /// Delete all temporary chunk files
+    pub fn delete_all(&mut self) -> Result<(), io::Error> {
+        for (_timeout, chunk) in self.chunks.values() {
+            fs::remove_file(&chunk.path)?;
+        }
+
+        self.chunks.clear();
+
+        Ok(())
+    }
+
+    pub fn delete_timed_out(&mut self) -> Result<(), io::Error> {
+        let now = Utc::now();
+        self.mut_chunks().retain(|_u, (t, c)| {
+            if *t <= now {
+                let _ = fs::remove_file(&c.path);
+                false
+            } else {
+                true
+            }
+        });
+
+        Ok(())
+    }
+}
+
+/// Information about how to manage partially uploaded chunks of files
+#[serde_as]
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
+pub struct ChunkedInfo {
+    pub name: String,
+    pub size: u64,
+    #[serde_as(as = "serde_with::DurationSeconds<i64>")]
+    pub expire_duration: TimeDelta,
+
+    #[serde(skip)]
+    pub path: PathBuf,
+    #[serde(skip)]
+    pub offset: u64,
 }
