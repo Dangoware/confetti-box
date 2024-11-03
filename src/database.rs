@@ -13,13 +13,13 @@ use ciborium::{from_reader, into_writer};
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
-    form::{self, FromFormField, ValueField}, serde::{Deserialize, Serialize}
+    form::{self, FromFormField, ValueField},
+    serde::{Deserialize, Serialize},
 };
 use serde_with::{serde_as, DisplayFromStr};
 use uuid::Uuid;
 
-#[derive(Debug, Clone)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mochibase {
     path: PathBuf,
 
@@ -153,8 +153,7 @@ impl Mochibase {
 
 /// An entry in the database storing metadata about a file
 #[serde_as]
-#[derive(Debug, Clone)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MochiFile {
     /// A unique identifier describing this file
     mmid: Mmid,
@@ -265,8 +264,7 @@ pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Deserialize, Serialize)]
 pub struct Mmid(String);
 
 impl Mmid {
@@ -332,9 +330,7 @@ impl std::fmt::Display for Mmid {
 #[rocket::async_trait]
 impl<'r> FromFormField<'r> for Mmid {
     fn from_value(field: ValueField<'r>) -> form::Result<'r, Self> {
-        Ok(
-            Self::try_from(field.value).map_err(|_| form::Error::validation("Invalid MMID"))?
-        )
+        Ok(Self::try_from(field.value).map_err(|_| form::Error::validation("Invalid MMID"))?)
     }
 }
 
@@ -381,8 +377,7 @@ impl Chunkbase {
 
 /// Information about how to manage partially uploaded chunks of files
 #[serde_as]
-#[derive(Default, Debug, Clone)]
-#[derive(Deserialize, Serialize)]
+#[derive(Default, Debug, Clone, Deserialize, Serialize)]
 pub struct ChunkedInfo {
     pub name: String,
     pub size: u64,

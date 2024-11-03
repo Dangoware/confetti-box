@@ -6,7 +6,10 @@ pub mod settings;
 pub mod strings;
 pub mod utils;
 
-use std::{io::{self, ErrorKind}, sync::{Arc, RwLock}};
+use std::{
+    io::{self, ErrorKind},
+    sync::{Arc, RwLock},
+};
 
 use crate::{
     pages::{footer, head},
@@ -17,7 +20,14 @@ use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit, get, post, serde::{json::Json, Serialize}, tokio::{fs, io::{AsyncSeekExt, AsyncWriteExt}}, Data, State
+    data::ToByteUnit,
+    get, post,
+    serde::{json::Json, Serialize},
+    tokio::{
+        fs,
+        io::{AsyncSeekExt, AsyncWriteExt},
+    },
+    Data, State,
 };
 use uuid::Uuid;
 
@@ -98,15 +108,18 @@ pub async fn chunked_upload_start(
     mut file_info: Json<ChunkedInfo>,
 ) -> Result<Json<ChunkedResponse>, std::io::Error> {
     let uuid = Uuid::new_v4();
-    file_info.path = settings
-        .temp_dir
-        .join(uuid.to_string());
+    file_info.path = settings.temp_dir.join(uuid.to_string());
 
     // Perform some sanity checks
     if file_info.size > settings.max_filesize {
         return Ok(Json(ChunkedResponse::failure("File too large")));
     }
-    if settings.duration.restrict_to_allowed && !settings.duration.allowed.contains(&file_info.expire_duration) {
+    if settings.duration.restrict_to_allowed
+        && !settings
+            .duration
+            .allowed
+            .contains(&file_info.expire_duration)
+    {
         return Ok(Json(ChunkedResponse::failure("Duration not allowed")));
     }
     if file_info.expire_duration > settings.duration.maximum {
@@ -115,10 +128,10 @@ pub async fn chunked_upload_start(
 
     fs::File::create_new(&file_info.path).await?;
 
-    db.write()
-        .unwrap()
-        .mut_chunks()
-        .insert(uuid, (Utc::now() + TimeDelta::seconds(30), file_info.into_inner()));
+    db.write().unwrap().mut_chunks().insert(
+        uuid,
+        (Utc::now() + TimeDelta::seconds(30), file_info.into_inner()),
+    );
 
     Ok(Json(ChunkedResponse {
         status: true,
@@ -152,7 +165,10 @@ pub async fn chunked_upload_continue(
         .await?;
 
     if offset > chunked_info.1.size {
-        return Err(io::Error::new(ErrorKind::InvalidInput, "The seek position is larger than the file size"))
+        return Err(io::Error::new(
+            ErrorKind::InvalidInput,
+            "The seek position is larger than the file size",
+        ));
     }
 
     file.seek(io::SeekFrom::Start(offset)).await?;
@@ -161,11 +177,8 @@ pub async fn chunked_upload_continue(
     let position = file.stream_position().await?;
 
     if position > chunked_info.1.size {
-        chunk_db.write()
-            .unwrap()
-            .mut_chunks()
-            .remove(&uuid);
-        return Err(io::Error::other("File larger than expected"))
+        chunk_db.write().unwrap().mut_chunks().remove(&uuid);
+        return Err(io::Error::other("File larger than expected"));
     }
 
     Ok(())
@@ -187,14 +200,15 @@ pub async fn chunked_upload_finish(
     };
 
     // Remove the finished chunk from the db
-    chunk_db.write()
+    chunk_db
+        .write()
         .unwrap()
         .mut_chunks()
         .remove(&uuid)
         .unwrap();
 
     if !chunked_info.1.path.try_exists().is_ok_and(|e| e) {
-        return Err(io::Error::other("File does not exist"))
+        return Err(io::Error::other("File does not exist"));
     }
 
     // Get file hash
@@ -220,10 +234,13 @@ pub async fn chunked_upload_finish(
         file_type.media_type().to_string(),
         hash,
         now,
-        now + chunked_info.1.expire_duration
+        now + chunked_info.1.expire_duration,
     );
 
-    main_db.write().unwrap().insert(&mmid, constructed_file.clone());
+    main_db
+        .write()
+        .unwrap()
+        .insert(&mmid, constructed_file.clone());
 
     Ok(Json(constructed_file))
 }

@@ -1,5 +1,7 @@
 use std::{
-    fs, path::PathBuf, sync::{Arc, RwLock}
+    fs,
+    path::PathBuf,
+    sync::{Arc, RwLock},
 };
 
 use chrono::TimeDelta;
@@ -9,7 +11,11 @@ use confetti_box::{
     settings::Settings,
 };
 use log::info;
-use rocket::{data::ToByteUnit as _, routes, tokio::{self, select, sync::broadcast::Receiver, time}};
+use rocket::{
+    data::ToByteUnit as _,
+    routes,
+    tokio::{self, select, sync::broadcast::Receiver, time},
+};
 
 #[rocket::main]
 async fn main() {
@@ -38,9 +44,7 @@ async fn main() {
     let database = Arc::new(RwLock::new(
         Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database"),
     ));
-    let chunkbase = Arc::new(RwLock::new(
-        Chunkbase::default(),
-    ));
+    let chunkbase = Arc::new(RwLock::new(Chunkbase::default()));
     let local_db = database.clone();
     let local_chunk = chunkbase.clone();
 
@@ -95,9 +99,7 @@ async fn main() {
     rocket.expect("Server failed to shutdown gracefully");
 
     info!("Stopping database cleaning thread...");
-    shutdown
-        .send(())
-        .expect("Failed to stop cleaner thread.");
+    shutdown.send(()).expect("Failed to stop cleaner thread.");
     info!("Stopping database cleaning thread completed successfully.");
 
     info!("Saving database on shutdown...");
@@ -132,10 +134,7 @@ pub async fn clean_loop(
     }
 }
 
-pub async fn clean_chunks(
-    chunk_db: Arc<RwLock<Chunkbase>>,
-    mut shutdown_signal: Receiver<()>,
-) {
+pub async fn clean_chunks(chunk_db: Arc<RwLock<Chunkbase>>, mut shutdown_signal: Receiver<()>) {
     let mut interval = time::interval(TimeDelta::seconds(30).to_std().unwrap());
 
     loop {
