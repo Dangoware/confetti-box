@@ -18,7 +18,7 @@ A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](ht
 
 ## Screenshot
 <p align="center">
-  <img width="500px" src="https://github.com/user-attachments/assets/2ca05da6-ce5e-4cde-a3b0-453ccdd33264">
+  <img width="500px" src="https://github.com/user-attachments/assets/9b12d65f-257d-448f-a7d0-43068cc3f8a3">
   <p align="center"><i>An example of a running instance</i></p>
 </p>
 
