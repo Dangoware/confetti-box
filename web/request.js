@@ -173,13 +173,15 @@ async function addNewToList(origFileName) {
 function uploadProgress(progress, progressBar, progressText, progressValues, fileSize, ID) {
     if (progress.lengthComputable) {
         progressValues[ID] = progress.loaded;
+        const progressTotal = progressValues.reduce((a, b) => a + b, 0);
 
-        const progressPercent = Math.floor((progressValues.reduce((a, b) => a + b, 0) / fileSize) * 100);
+        const progressPercent = Math.floor((progressTotal / fileSize) * 100);
         if (progressPercent == 100) {
             progressBar.removeAttribute("value");
             progressText.textContent = "⏳";
         } else {
-            progressBar.value = progressPercent;
+            progressBar.value = progressTotal;
+            progressBar.max = fileSize;
             progressText.textContent = progressPercent + "%";
         }
     }
