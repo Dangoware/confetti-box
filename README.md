@@ -6,13 +6,13 @@ A super simple file host. Inspired by [Catbox](https://catbox.moe) and [Uguu](ht
 - Entirely self contained, tiny (~4MB) single binary 
 - Customizable using a simple config file
 - Only stores one copy of a given hash on the backend
+- Chunked uploads of configurable size
 - Fast (enough), runs just fine on a Raspberry Pi
 - Simple API for interfacing with it programmatically
 - No database setup required, uses self-contained in memory database
   serialized to a small, LZ4 compressed file.
 
 ### Planned
-- Chunked uploads
 - Theming
 - More mochi
 
