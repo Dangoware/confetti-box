@@ -114,10 +114,11 @@ async function uploadFile(file, duration, maxSize) {
     // Upload the file in `chunk_size` chunks
     const chunkUploads = new Set();
     const progressValues = [];
-    const concurrencyLimit = 4;
-    for (let start = 0; start < file.size; start += chunkedResponse.chunk_size) {
-        const chunk = file.slice(start, start + chunkedResponse.chunk_size)
-        const url = "/upload/chunked/" + chunkedResponse.uuid + "?offset=" + start;
+    const concurrencyLimit = 5;
+    for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkedResponse.chunk_size) + 1; chunk_num ++) {
+        const offset = Math.floor(chunk_num * chunkedResponse.chunk_size);
+        const chunk = file.slice(offset, offset + chunkedResponse.chunk_size);
+        const url = "/upload/chunked/" + chunkedResponse.uuid + "?chunk=" + chunk_num;
         const ID = progressValues.push(0);
 
         let upload = new Promise(function (resolve, reject) {

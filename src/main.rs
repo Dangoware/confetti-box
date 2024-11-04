@@ -136,7 +136,6 @@ pub async fn clean_loop(
 
 pub async fn clean_chunks(chunk_db: Arc<RwLock<Chunkbase>>, mut shutdown_signal: Receiver<()>) {
     let mut interval = time::interval(TimeDelta::seconds(30).to_std().unwrap());
-
     loop {
         select! {
             _ = interval.tick() => {let _ = chunk_db.write().unwrap().delete_timed_out();},

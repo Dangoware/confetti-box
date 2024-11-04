@@ -141,13 +141,13 @@ pub async fn chunked_upload_start(
     }))
 }
 
-#[post("/upload/chunked/<uuid>?<offset>", data = "<data>")]
+#[post("/upload/chunked/<uuid>?<chunk>", data = "<data>")]
 pub async fn chunked_upload_continue(
     chunk_db: &State<Arc<RwLock<Chunkbase>>>,
     settings: &State<Settings>,
     data: Data<'_>,
     uuid: &str,
-    offset: u64,
+    chunk: u64,
 ) -> Result<(), io::Error> {
     let uuid = Uuid::parse_str(uuid).map_err(io::Error::other)?;
     let data_stream = data.open((settings.chunk_size + 100).bytes());
@@ -156,6 +156,9 @@ pub async fn chunked_upload_continue(
         Some(s) => s.clone(),
         None => return Err(io::Error::other("Invalid UUID")),
     };
+    if chunked_info.1.recieved_chunks.contains(&chunk) {
+        return Err(io::Error::new(ErrorKind::Other, "Chunk already uploaded"));
+    }
 
     let mut file = fs::File::options()
         .read(true)
@@ -164,22 +167,36 @@ pub async fn chunked_upload_continue(
         .open(&chunked_info.1.path)
         .await?;
 
-    if offset > chunked_info.1.size {
+    let offset = chunk * settings.chunk_size;
+    if (offset > chunked_info.1.size) | (offset > settings.max_filesize) {
         return Err(io::Error::new(
             ErrorKind::InvalidInput,
-            "The seek position is larger than the file size",
+            "Invalid chunk number for file",
         ));
     }
 
     file.seek(io::SeekFrom::Start(offset)).await?;
-    data_stream.stream_to(&mut file).await?;
+    let written = data_stream.stream_to(&mut file).await?.written;
     file.flush().await?;
     let position = file.stream_position().await?;
 
+    if written > settings.chunk_size {
+        chunk_db.write().unwrap().mut_chunks().remove(&uuid);
+        return Err(io::Error::other("Wrote more than one chunk"));
+    }
     if position > chunked_info.1.size {
         chunk_db.write().unwrap().mut_chunks().remove(&uuid);
         return Err(io::Error::other("File larger than expected"));
     }
+    chunk_db
+        .write()
+        .unwrap()
+        .mut_chunks()
+        .get_mut(&uuid)
+        .unwrap()
+        .1
+        .recieved_chunks
+        .insert(chunk);
 
     Ok(())
 }

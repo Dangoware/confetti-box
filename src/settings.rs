@@ -11,38 +11,31 @@ use serde_with::serde_as;
 
 /// A response to the client from the server
 #[derive(Deserialize, Serialize, Debug)]
-#[serde(crate = "rocket::serde")]
+#[serde(default)]
 pub struct Settings {
     /// Maximum filesize in bytes
-    #[serde(default)]
     pub max_filesize: u64,
 
     /// Maximum filesize in bytes
-    #[serde(default)]
     pub chunk_size: u64,
 
     /// Is overwiting already uploaded files with the same hash allowed, or is
     /// this a no-op?
-    #[serde(default)]
     pub overwrite: bool,
 
     /// Settings pertaining to duration information
     pub duration: DurationSettings,
 
     /// The path to the database file
-    #[serde(default)]
     pub database_path: PathBuf,
 
     /// Temporary directory for stuff
-    #[serde(default)]
     pub temp_dir: PathBuf,
 
     /// Directory in which to store hosted files
-    #[serde(default)]
     pub file_dir: PathBuf,
 
     /// Settings pertaining to the server configuration
-    #[serde(default)]
     pub server: ServerSettings,
 
     #[serde(skip)]
@@ -53,7 +46,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             max_filesize: 25.megabytes().into(), // 1 MB
-            chunk_size: 1.megabytes().into(),
+            chunk_size: 10.megabytes().into(),
             overwrite: true,
             duration: DurationSettings::default(),
             server: ServerSettings::default(),

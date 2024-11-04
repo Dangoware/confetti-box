@@ -384,6 +384,10 @@ pub struct ChunkedInfo {
     #[serde_as(as = "serde_with::DurationSeconds<i64>")]
     pub expire_duration: TimeDelta,
 
+    /// Tracks which chunks have already been recieved, so you can't overwrite
+    /// some wrong part of a file
+    #[serde(skip)]
+    pub recieved_chunks: HashSet<u64>,
     #[serde(skip)]
     pub path: PathBuf,
     #[serde(skip)]
