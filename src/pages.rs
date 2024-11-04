@@ -44,35 +44,62 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
                     "Confetti-Box is designed to be simple to access using its
                     API. All endpoints are accessed following "
                     code{"https://"(domain) (root)} ". All responses are encoded
-                    in JSON. MMIDs are a unique identifier for a file returned by
-                    the server after a successful " code{"/upload"} " request."
+                    in JSON. MMIDs are a unique identifier for a file returned
+                    by the server after a successful upload. All datetimes are
+                    in UTC."
                 }
                 p {
                     "The following endpoints are supported:"
                 }
 
-                h2 { code {"/upload"} }
-                pre { r#"POST duration=String fileUpload=Bytes -> JSON"# }
+                hr;
+                h2 { code {"/upload/chunked"} }
+                pre { r#"POST JSON{"name":string, "size":int, "expire_duration":int} -> JSON"# }
                 p {
-                    "To upload files, " code{"POST"} " a multipart form
-                    containing the fields " code{"duration"} " and "
-                    code{"fileData"} " to this endpoint. " code{"duration"}
-                    " MUST be a string formatted like " code{"1H"}", where
-                    the number MUST be a valid number and the letter MUST be
-                    one of " b{"S"} "(econd), " b{"M"}"(inute), " b{"H"}"(our), "
-                    b{"D"}"(ay). The " code{"/info"} " endpoint returns valid
-                    durations and maximum file sizes."
+                    "Start here to upload a file. POST some JSON containing the
+                    required variables to this endpoint, and you will recieve a
+                    UUID and a few other items which you can use to send the
+                    follow up requests to actually complete the upload."
                 }
                 p {
                     "Example successful response:"
                 }
                 pre {
-                    "{\n\t\"status\": true,\n\t\"response\": \"\",\n\t\"name\": \"1600-1200.jpg\",\n\t\"mmid\": \"xNLF6ogx\",\n\t\"hash\": \"1f12137f2c263d9e6d686e90c687a55d46d064fe6eeda7e4c39158d20ce1f071\",\n\t\"expires\": \"2024-10-28T11:59:25.024373438Z\"\n}"
+                    "{\n\t\"status\": true,\n\t\"message\": \"\",\n\t\"uuid\": \"ca4614b1-04d5-457b-89af-a4e00576f701\",\n\t\"chunk_size\": 20000000\n}"
                 }
                 p {"Example failure response:"}
                 pre {
-                    "{\n\t\"status\": false,\n\t\"response\": \"Duration invalid\",\n}"
+                    "{\n\t\"status\": false,\n\t\"message\": \"Duration invalid\",\n}"
                 }
+
+                hr;
+                h2 { code {"/upload/chunked/<uuid>?chunk=<chunk>"} }
+                pre { r#"POST <file data> -> ()"# }
+                p {
+                    "After completing the " code {"/upload/chunked"} " request,
+                    upload data in " code {"chunk_size"} " chunks to this
+                    endpoint using the UUID obtained from the initial request.
+                    The chunk number is the position in the file in chunks.
+                    The client MUST perform as many of these transfers as it
+                    takes to upload the entire file. Any duplicated chunks will
+                    be rejected. Any rejection means that the file will be
+                    deleted and the client SHOULD restart the transaction from
+                    the beginning. The client SHOULD retry sending the chunk on
+                    network errors."
+                }
+
+                hr;
+                h2 { code {"/upload/chunked/<uuid>?finish"} }
+                pre { r#"GET -> JSON"# }
+                p {
+                    "Once all the chunks have been uploaded, finish the upload
+                    by sending a GET request to this endpoint."
+                }
+                p {"Example successful response:"}
+                pre {
+                    "{\n\t\"mmid\": \"uVFNeajm\",\n\t\"name\": \"1600-1200.jpg\",\n\t\"mime_type\": \"image/jpeg\",\n\t\"hash\": \"8f92924d52e796a82fd7709b43f5e907949e7098f5b4bc94b314c0bd831e7719\",\n\t\"upload_datetime\": \"2024-11-04T13:23:20.592090428Z\",\n\t\"expiry_datetime\": \"2024-11-04T19:23:20.592090428Z\"\n}"
+                }
+
 
                 hr;
                 h2 { code {"/info"} }
