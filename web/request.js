@@ -164,8 +164,8 @@ async function addNewToList(origFileName) {
     fileName.textContent = origFileName;
     fileName.classList.add("file_name");
     progressTxt.classList.add("status");
+    progressTxt.textContent = "⏳";
     progressBar.max="100";
-    progressBar.value="0";
 
     return [linkRow, progressBar, progressTxt];
 }

@@ -143,11 +143,14 @@ h2 code {
 }
 
 #uploadedFilesDisplay p.file_name {
-    width: 50%;
     overflow: clip;
     text-overflow: ellipsis;
     white-space: nowrap;
     display: block;
+    flex-shrink: 2;
+    flex-basis: 100%;
+    min-width: 0;
+    max-width: 70%;
 }
 
 #uploadedFilesDisplay p.status {
@@ -161,6 +164,7 @@ h2 code {
     margin: auto 0;
     margin-left: auto;
     width: min-content;
+    min-width: 32px;
     flex-shrink: 2;
     display: block;
 }
@@ -177,8 +181,10 @@ h2 code {
 #uploadedFilesDisplay > div > progress {
     height: 20px;
     margin: auto;
-    flex-grow: 2;
     display: block;
+    width: 100%;
+    flex-shrink: 2;
+    max-width: 35%;
 }
 
 #uploadedFilesDisplay button {
