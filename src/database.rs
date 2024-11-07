@@ -14,7 +14,7 @@ use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     form::{self, FromFormField, ValueField},
-    serde::{Deserialize, Serialize},
+    serde::{Deserialize, Serialize}, tokio,
 };
 use serde_with::{serde_as, DisplayFromStr};
 use uuid::Uuid;
@@ -341,14 +341,6 @@ pub struct Chunkbase {
 }
 
 impl Chunkbase {
-    pub fn chunks(&self) -> &HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
-        &self.chunks
-    }
-
-    pub fn mut_chunks(&mut self) -> &mut HashMap<Uuid, (DateTime<Utc>, ChunkedInfo)> {
-        &mut self.chunks
-    }
-
     /// Delete all temporary chunk files
     pub fn delete_all(&mut self) -> Result<(), io::Error> {
         for (_timeout, chunk) in self.chunks.values() {
@@ -362,7 +354,7 @@ impl Chunkbase {
 
     pub fn delete_timed_out(&mut self) -> Result<(), io::Error> {
         let now = Utc::now();
-        self.mut_chunks().retain(|_u, (t, c)| {
+        self.chunks.retain(|_u, (t, c)| {
             if *t <= now {
                 let _ = fs::remove_file(&c.path);
                 false
@@ -372,6 +364,64 @@ impl Chunkbase {
         });
 
         Ok(())
+    }
+
+    pub fn new_file<P: AsRef<Path>>(&mut self, mut info: ChunkedInfo, temp_dir: &P, timeout: TimeDelta) -> Result<Uuid, io::Error> {
+        let uuid = Uuid::new_v4();
+        let expire = Utc::now() + timeout;
+        info.path = temp_dir.as_ref().join(uuid.to_string());
+
+        self.chunks.insert(uuid, (expire, info.clone()));
+
+        fs::File::create_new(&info.path)?;
+
+        Ok(uuid)
+    }
+
+    pub fn get_file(&self, uuid: &Uuid) -> Option<&(DateTime<Utc>, ChunkedInfo)> {
+        self.chunks.get(&uuid)
+    }
+
+    pub fn remove_file(&mut self, uuid: &Uuid) -> Result<bool, io::Error> {
+        let item = match self.chunks.remove(uuid) {
+            Some(i) => i,
+            None => return Ok(false),
+        };
+
+        fs::remove_file(item.1.path)?;
+
+        Ok(true)
+    }
+
+    pub fn move_and_remove_file<P: AsRef<Path>>(&mut self, uuid: &Uuid, new_location: &P) -> Result<bool, io::Error> {
+        let item = match self.chunks.remove(uuid) {
+            Some(i) => i,
+            None => return Ok(false),
+        };
+
+        fs::rename(item.1.path, new_location)?;
+
+        Ok(true)
+    }
+
+    pub fn extend_timeout(&mut self, uuid: &Uuid, timeout: TimeDelta) -> bool {
+        let item = match self.chunks.get_mut(uuid) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        item.0 = Utc::now() + timeout;
+
+        true
+    }
+
+    pub fn add_recieved_chunk(&mut self, uuid: &Uuid, chunk: u64) -> bool {
+        let item = match self.chunks.get_mut(uuid) {
+            Some(i) => i,
+            None => return false,
+        };
+
+        item.1.recieved_chunks.insert(chunk)
     }
 }
 

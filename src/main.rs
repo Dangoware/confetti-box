@@ -56,10 +56,9 @@ async fn main() {
         async move { clean_loop(cleaner_db, file_path, rx).await }
     });
     tokio::spawn({
-        let cleaner_db = database.clone();
-        let file_path = config.file_dir.clone();
+        let chunk_db = local_chunk.clone();
         let rx2 = shutdown.subscribe();
-        async move { clean_loop(cleaner_db, file_path, rx2).await }
+        async move { clean_chunks(chunk_db, rx2).await }
     });
 
     let rocket = rocket::build()

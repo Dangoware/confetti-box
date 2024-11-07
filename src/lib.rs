@@ -20,14 +20,10 @@ use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit,
-    get, post,
-    serde::{json::Json, Serialize},
-    tokio::{
+    data::ToByteUnit, get, post, serde::{json::Json, Serialize}, tokio::{
         fs,
         io::{AsyncSeekExt, AsyncWriteExt},
-    },
-    Data, State,
+    }, Data, State
 };
 use uuid::Uuid;
 
@@ -105,11 +101,8 @@ impl ChunkedResponse {
 pub async fn chunked_upload_start(
     db: &State<Arc<RwLock<Chunkbase>>>,
     settings: &State<Settings>,
-    mut file_info: Json<ChunkedInfo>,
+    file_info: Json<ChunkedInfo>,
 ) -> Result<Json<ChunkedResponse>, std::io::Error> {
-    let uuid = Uuid::new_v4();
-    file_info.path = settings.temp_dir.join(uuid.to_string());
-
     // Perform some sanity checks
     if file_info.size > settings.max_filesize {
         return Ok(Json(ChunkedResponse::failure("File too large")));
@@ -126,12 +119,11 @@ pub async fn chunked_upload_start(
         return Ok(Json(ChunkedResponse::failure("Duration too large")));
     }
 
-    fs::File::create_new(&file_info.path).await?;
-
-    db.write().unwrap().mut_chunks().insert(
-        uuid,
-        (Utc::now() + TimeDelta::seconds(30), file_info.into_inner()),
-    );
+    let uuid = db.write().unwrap().new_file(
+        file_info.0,
+        &settings.temp_dir,
+        TimeDelta::seconds(30)
+    )?;
 
     Ok(Json(ChunkedResponse {
         status: true,
@@ -152,10 +144,11 @@ pub async fn chunked_upload_continue(
     let uuid = Uuid::parse_str(uuid).map_err(io::Error::other)?;
     let data_stream = data.open((settings.chunk_size + 100).bytes());
 
-    let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
+    let chunked_info = match chunk_db.read().unwrap().get_file(&uuid) {
         Some(s) => s.clone(),
         None => return Err(io::Error::other("Invalid UUID")),
     };
+
     if chunked_info.1.recieved_chunks.contains(&chunk) {
         return Err(io::Error::new(ErrorKind::Other, "Chunk already uploaded"));
     }
@@ -181,22 +174,16 @@ pub async fn chunked_upload_continue(
     let position = file.stream_position().await?;
 
     if written > settings.chunk_size {
-        chunk_db.write().unwrap().mut_chunks().remove(&uuid);
+        chunk_db.write().unwrap().remove_file(&uuid)?;
         return Err(io::Error::other("Wrote more than one chunk"));
     }
     if position > chunked_info.1.size {
-        chunk_db.write().unwrap().mut_chunks().remove(&uuid);
+        chunk_db.write().unwrap().remove_file(&uuid)?;
         return Err(io::Error::other("File larger than expected"));
     }
-    chunk_db
-        .write()
-        .unwrap()
-        .mut_chunks()
-        .get_mut(&uuid)
-        .unwrap()
-        .1
-        .recieved_chunks
-        .insert(chunk);
+
+    chunk_db.write().unwrap().add_recieved_chunk(&uuid, chunk);
+    chunk_db.write().unwrap().extend_timeout(&uuid, TimeDelta::seconds(30));
 
     Ok(())
 }
@@ -211,18 +198,10 @@ pub async fn chunked_upload_finish(
 ) -> Result<Json<MochiFile>, io::Error> {
     let now = Utc::now();
     let uuid = Uuid::parse_str(uuid).map_err(io::Error::other)?;
-    let chunked_info = match chunk_db.read().unwrap().chunks().get(&uuid) {
+    let chunked_info = match chunk_db.read().unwrap().get_file(&uuid) {
         Some(s) => s.clone(),
         None => return Err(io::Error::other("Invalid UUID")),
     };
-
-    // Remove the finished chunk from the db
-    chunk_db
-        .write()
-        .unwrap()
-        .mut_chunks()
-        .remove(&uuid)
-        .unwrap();
 
     if !chunked_info.1.path.try_exists().is_ok_and(|e| e) {
         return Err(io::Error::other("File does not exist"));
@@ -236,10 +215,11 @@ pub async fn chunked_upload_finish(
 
     // If the hash does not exist in the database,
     // move the file to the backend, else, delete it
+    // This also removes it from the chunk database
     if main_db.read().unwrap().get_hash(&hash).is_none() {
-        std::fs::rename(&chunked_info.1.path, &new_filename).unwrap();
+        chunk_db.write().unwrap().move_and_remove_file(&uuid, &new_filename)?;
     } else {
-        std::fs::remove_file(&chunked_info.1.path).unwrap();
+        chunk_db.write().unwrap().remove_file(&uuid)?;
     }
 
     let mmid = Mmid::new_random();
