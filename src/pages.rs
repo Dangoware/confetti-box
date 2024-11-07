@@ -131,6 +131,8 @@ pub fn api_info(settings: &State<Settings>) -> Markup {
                     behavior can be modified by appending " code{"?noredir"} " to
                     the end of this request, like " code{"/f/<mmid>?noredir"} ",
                     in which case it behaves just like " code{"/f/<mmid>/<filename>"}
+                    ". Appending " code{"download"} " forces the browser to download
+                    the file regardless of MIME type."
                 }
                 p {"Example default response:"}
                 pre {"303: /f/xNLF6ogx/1600-1200.jpg"}

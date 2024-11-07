@@ -4,7 +4,7 @@ use std::{
 };
 
 use rocket::{
-    get, http::ContentType, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::fs::File, uri, Request, State
+    get, http::{uri::Uri, ContentType, Header}, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::{self, fs::File}, uri, Request, State
 };
 use serde::Serialize;
 
@@ -60,12 +60,13 @@ pub async fn lookup_mmid(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Opti
     ))))
 }
 
-#[get("/f/<mmid>?noredir")]
+#[get("/f/<mmid>?noredir&<download>")]
 pub async fn lookup_mmid_noredir(
     db: &State<Arc<RwLock<Mochibase>>>,
     settings: &State<Settings>,
     mmid: &str,
-) -> Option<(ContentType, File)> {
+    download: bool,
+) -> Option<FileDownloader> {
     let mmid: Mmid = mmid.try_into().ok()?;
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
@@ -73,11 +74,42 @@ pub async fn lookup_mmid_noredir(
         .await
         .ok()?;
 
-    Some((
-        ContentType::from_str(entry.mime_type()).unwrap_or(ContentType::Binary),
-        file,
-    ))
+    Some(FileDownloader {
+        inner: file,
+        filename: entry.name().clone(),
+        content_type: ContentType::from_str(entry.mime_type()).unwrap_or(ContentType::Binary),
+        disposition: download
+    })
 }
+
+pub struct FileDownloader {
+    inner: tokio::fs::File,
+    filename: String,
+    content_type: ContentType,
+    disposition: bool,
+}
+
+impl<'r> Responder<'r, 'r> for FileDownloader {
+    fn respond_to(self, _: &'r Request<'_>) -> response::Result<'r> {
+        let mut resp = Response::build();
+        resp.streamed_body(self.inner)
+            .header(self.content_type);
+
+        if self.disposition {
+            resp.raw_header(
+                "Content-Disposition",
+                format!(
+                    "attachment; filename=\"{}\"; filename*=UTF-8''{}",
+                    unidecode::unidecode(&self.filename),
+                    urlencoding::encode(&self.filename)
+                )
+            );
+        }
+
+        resp.ok()
+    }
+}
+
 
 #[get("/f/<mmid>/<name>")]
 pub async fn lookup_mmid_name(
