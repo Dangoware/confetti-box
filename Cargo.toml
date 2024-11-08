@@ -7,7 +7,7 @@ edition = "2021"
 blake3 = { version = "1.5.4", features = ["mmap", "rayon", "serde"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 ciborium = "0.2.2"
-file-format = { git="https://github.com/mmalecot/file-format.git", branch="dev", features = ["reader"] }
+file-format = { version = "0.26", features = ["reader"] }
 log = "0.4"
 lz4_flex = "0.11.3"
 maud = { version = "0.26", features = ["rocket"] }
