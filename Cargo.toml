@@ -2,10 +2,11 @@
 resolver = "2"
 members = [
     "confetti-box",
+    "confetti-cli",
 ]
 
 [workspace.package]
-authors = ["G2"]
+authors = ["G2-Games <ke0bhogsg@gmail.com>", "MrDulfin"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -1,0 +1,29 @@
+[package]
+name = "confetti_cli"
+version = "0.1.1"
+description = "A simple command line interface to interact with a Confetti-Box instance."
+repository = "https://github.com/Dangoware/confetti-box"
+keywords = ["selfhost", "upload", "command_line"]
+categories = ["command-line-utilities"]
+authors.workspace = true
+license = "AGPL-3.0-or-later"
+edition = "2021"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = "1.0.92"
+chrono = { version = "0.4.38", features = ["serde"] }
+clap = { version = "4.5.20", features = ["derive", "unicode"] }
+directories = "5.0.1"
+indicatif = { version = "0.17.8", features = ["improved_unicode"] }
+owo-colors = { version = "4.1.0", features = ["supports-colors"] }
+reqwest = { version = "0.12.8", features = ["json", "stream"] }
+serde = { version = "1.0.213", features = ["derive"] }
+serde_json = "1.0.132"
+thiserror = "1.0.68"
+tokio = { version = "1.41.0", features = ["fs", "macros", "rt-multi-thread"] }
+tokio-util = { version = "0.7.12", features = ["codec"] }
+toml = "0.8.19"
+uuid = { version = "1.11.0", features = ["serde", "v4"] }
