@@ -20,9 +20,9 @@ use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit, get, http::ContentType, post, serde::{json::Json, Serialize}, tokio::{
-        self, fs, io::{AsyncSeekExt, AsyncWriteExt}
-    }, Data, Responder, State
+    data::ToByteUnit, get, post, serde::{json::Json, Serialize}, tokio::{
+        fs, io::{AsyncSeekExt, AsyncWriteExt}
+    }, Data, State
 };
 use uuid::Uuid;
 

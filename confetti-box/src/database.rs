@@ -14,7 +14,7 @@ use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     form::{self, FromFormField, ValueField},
-    serde::{Deserialize, Serialize}, tokio,
+    serde::{Deserialize, Serialize},
 };
 use serde_with::{serde_as, DisplayFromStr};
 use uuid::Uuid;

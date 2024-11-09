@@ -4,7 +4,7 @@ use std::{
 };
 
 use rocket::{
-    get, http::{uri::Uri, ContentType, Header}, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::{self, fs::File}, uri, Request, State
+    get, http::ContentType, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::{self, fs::File}, uri, Request, State
 };
 use serde::Serialize;
 
