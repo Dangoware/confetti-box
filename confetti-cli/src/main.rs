@@ -33,6 +33,7 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Upload files
+    #[command(visible_alias="u")]
     Upload {
         /// Filename(s) to upload
         #[arg(value_name = "file(s)", required = true)]
@@ -107,6 +108,11 @@ async fn main() -> Result<()> {
 
             println!("Uploading...");
             for path in files {
+                if !path.try_exists().is_ok_and(|t| t) {
+                    print_error_line(format!("The file {:#?} does not exist", path.truecolor(234, 129, 100)));
+                    continue;
+                }
+
                 let name = path.file_name().unwrap().to_string_lossy();
                 let response = upload_file(
                     name.into_owned(),
@@ -633,7 +639,7 @@ fn pretty_time_long(seconds: i64) -> String {
 }
 
 fn exit_error(main_message: String, fix: Option<String>, fix_values: Option<Vec<String>>) -> ! {
-    eprintln!("{}: {main_message}\n", "Error".truecolor(181,66,127).italic().underline());
+    print_error_line(main_message);
 
     if let Some(f) = fix {
         eprint!("{f} ");
@@ -651,4 +657,8 @@ fn exit_error(main_message: String, fix: Option<String>, fix_values: Option<Vec<
 
     eprintln!("For more information, try '{}'", "--help".truecolor(246,199,219));
     std::process::exit(1)
+}
+
+fn print_error_line(message: String) {
+    eprintln!("{}: {message}", "Error".truecolor(181,66,127).italic().underline());
 }

@@ -9,6 +9,10 @@ authors.workspace = true
 license = "AGPL-3.0-or-later"
 edition = "2021"
 
+[[bin]]
+name = "imu"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
