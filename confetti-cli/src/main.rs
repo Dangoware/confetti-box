@@ -3,7 +3,7 @@ use std::{error::Error, fs, io::{self, Read, Write}, os::unix::fs::MetadataExt, 
 use chrono::{DateTime, Datelike, Local, Month, TimeDelta, Timelike, Utc};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -220,11 +220,30 @@ async fn main() -> Result<()> {
                     .open(&out_directory).await
                     .unwrap();
 
-                while let Some(next) = file_res.chunk().await.unwrap() {
-                    out_file.write(&next).await.unwrap();
-                }
+                let progress_bar = ProgressBar::new(100);
 
-                println!("Downloaded to {}", out_directory.display());
+                progress_bar.set_style(ProgressStyle::with_template(
+                    &format!("{} {} {{bar:40.cyan/blue}} {{pos:>3}}% {{msg}}","Saving".bold(), &out_directory.file_name().unwrap().to_string_lossy().truecolor(246,199,219))
+                ).unwrap());
+
+                let mut chunk_size = 0;
+                let file_size = file_res.content_length().unwrap();
+                let mut first = true;
+
+                let mut i = 0;
+                while let Some(next) = file_res.chunk().await.unwrap() {
+                    i+=1;
+                    if first {
+                        chunk_size = next.len() as u64;
+                        first = false
+                    }
+                    out_file.write(&next).await.unwrap();
+
+                    progress_bar.set_position(f64::trunc(((i as f64 * chunk_size as f64) / file_size as f64) * 200.0) as u64);
+                }
+                progress_bar.finish_and_clear();
+
+                println!("Downloaded to \"{}\"", out_directory.display());
             }
         }
         Commands::Set {
