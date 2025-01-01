@@ -3,11 +3,11 @@ use std::{error::Error, fs, io::{self, Read, Write}, os::unix::fs::MetadataExt, 
 use chrono::{DateTime, Datelike, Local, Month, TimeDelta, Timelike, Utc};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::OwoColorize as _;
+use owo_colors::OwoColorize;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{fs::File, io::AsyncReadExt, task::JoinSet};
+use tokio::{fs::{create_dir, File}, io::{AsyncReadExt, AsyncWriteExt}, task::JoinSet};
 use uuid::Uuid;
 use clap::{arg, builder::{styling::RgbColor, Styles}, Parser, Subcommand};
 use anyhow::{anyhow, bail, Context as _, Result};
@@ -20,6 +20,7 @@ const CLAP_STYLE: Styles = Styles::styled()
     .error(RgbColor::on_default(RgbColor(181,66,127)).underline());
 
 const DEBUG_CONFIG: &str = "test/config.toml";
+const DEBUG_DOWNLOAD_DIR: &str = "test/downloads/";
 
 #[derive(Parser)]
 #[command(name = "confetti_cli")]
@@ -55,15 +56,22 @@ enum Commands {
         /// Set the URL of the server to connect to
         #[arg(long, required = false)]
         url: Option<String>,
+        /// Set the directory to download into by default
+        #[arg(value_name="directory", short_alias='d', long, required = false)]
+        dl_dir: Option<String>,
     },
 
     /// Get server information manually
     Info,
 
     /// Download files
+    #[command(visible_alias="d")]
     Download {
         /// MMID to download
-        mmid: String,
+        #[arg(value_name = "mmid(s)", required = true)]
+        mmids: Vec<String>,
+        #[arg(short, long, value_name = "out", required = false)]
+        out_directory: Option<PathBuf>
     },
 }
 
@@ -137,15 +145,118 @@ async fn main() -> Result<()> {
                 );
             }
         }
-        Commands::Download { mmid } => {
-            todo!();
+        Commands::Download { mmids, out_directory } => {
+            let out_directory = if let Some(dir) = out_directory {
+                dir
+            } else {
+                let ddir = &config.download_directory;
+                if ddir.as_os_str().is_empty() {
+                    exit_error(
+                        "Default download directory is empty".into(),
+                        Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                        None,
+                    );
+                } else if !ddir.exists() {
+                    exit_error(
+                        format!("Default download directory {} does not exist", ddir.display()),
+                        Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                        None,
+                        )
+                } else {
+                    ddir
+                }
+            };
+
+            let url = &config.url;
+            for mmid in mmids {
+                let mmid = if mmid.len() != 8 {
+                    if mmid.contains(format!("{url}/f/").as_str()) {
+                        let mmid = mmid.replace(format!("{url}/f/").as_str(), "");
+                        if mmid.len() != 8 {
+                            exit_error("{mmid} is not a valid MMID".into(), Some("MMID must be 8 characters long".into()), None)
+                        } else {
+                            mmid
+                        }
+                    } else {
+                        exit_error("{mmid} is not a valid MMID".into(), Some("MMID must be 8 characters long".into()), None)
+                    }
+                } else {
+                    unimplemented!();
+                };
+
+                let client = Client::new();
+
+                let info = if let Ok(file) = if let Some(login) = &config.login {
+                    client.get(format!("{}/info/{mmid}", url))
+                    .basic_auth(&login.user, Some(&login.pass))
+                } else {
+                    client.get(format!("{}/info/{mmid}", url))
+                }
+                .send()
+                .await
+                .unwrap()
+                .json::<MochiFile>()
+                .await {
+                    file
+                } else {
+                    exit_error(format!("File with MMID {mmid} was not found"), None, None)
+                };
+
+                let mut file_res = if let Some(login) = &config.login {
+                    client.get(format!("{}/f/{mmid}", config.url))
+                    .basic_auth(&login.user, Some(&login.pass))
+                } else {
+                    client.get(format!("{}/f/{mmid}", config.url))
+                }
+                .send()
+                .await
+                .unwrap();
+
+                let out_directory = out_directory.join(info.name);
+                let mut out_file: File = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .read(true)
+                    .open(&out_directory).await
+                    .unwrap();
+
+                let progress_bar = ProgressBar::new(100);
+
+                progress_bar.set_style(ProgressStyle::with_template(
+                    &format!("{} {} {{bar:40.cyan/blue}} {{pos:>3}}% {{msg}}","Saving".bold(), &out_directory.file_name().unwrap().to_string_lossy().truecolor(246,199,219))
+                ).unwrap());
+
+                let mut chunk_size = 0;
+                let file_size = file_res.content_length().unwrap();
+                let mut first = true;
+
+                let mut i = 0;
+                while let Some(next) = file_res.chunk().await.unwrap() {
+                    i+=1;
+                    if first {
+                        chunk_size = next.len() as u64;
+                        first = false
+                    }
+                    out_file.write(&next).await.unwrap();
+
+                    progress_bar.set_position(f64::trunc(((i as f64 * chunk_size as f64) / file_size as f64) * 200.0) as u64);
+                }
+                progress_bar.finish_and_clear();
+
+                println!("Downloaded to \"{}\"", out_directory.display());
+            }
         }
-        Commands::Set { username, password, url } => {
-            if username.is_none() && password.is_none() && url.is_none() {
+        Commands::Set {
+            username,
+            password,
+            url,
+            dl_dir
+        } => {
+            if username.is_none() && password.is_none() && url.is_none() && dl_dir.is_none() {
                 exit_error(
                     format!("Please provide an option to set"),
                     Some(format!("Allowed options:")),
-                    Some(vec!["--username".into(), "--password".into(), "--url".into()]),
+                    Some(vec!["--username".into(), "--password".into(), "--url".into(), "--dl-dir".into()]),
                 );
             }
 
@@ -164,7 +275,7 @@ async fn main() -> Result<()> {
                 }
 
                 config.save().unwrap();
-                println!("Set username to \"{u}\"")
+                println!("Username set to \"{u}\"")
             }
             if let Some(p) = password {
                 if p.is_empty() {
@@ -181,7 +292,7 @@ async fn main() -> Result<()> {
                 }
 
                 config.save().unwrap();
-                println!("Set password")
+                println!("Password set")
             }
             if let Some(url) = url {
                 if url.is_empty() {
@@ -196,7 +307,32 @@ async fn main() -> Result<()> {
 
                 config.url = url.to_string();
                 config.save().unwrap();
-                println!("Set URL to \"{url}\"");
+                println!("URL set to \"{url}\"");
+            }
+            if let Some(mut dir) = dl_dir.clone() {
+                if dir.is_empty() {
+                    exit_error(format!("Download directory cannot be blank"), None, None);
+                }
+                if dir.as_str() == "default" {
+                    dir = directories::UserDirs::new()
+                    .unwrap()
+                    .download_dir()
+                    .unwrap_or_else(|| exit_error("No Default directory available".into(), None, None))
+                    .to_string_lossy()
+                    .to_string();
+                }
+                if dir.chars().last() != Some('/') {
+                    dir.push('/');
+                }
+
+                let _dir = PathBuf::from(dir.clone());
+                if !_dir.exists() {
+                    exit_error(format!("Directory {dir} does not exist"), None, None)
+                }
+
+                config.download_directory = _dir;
+                config.save().unwrap();
+                println!("Download directory set to \"{dir}\"");
             }
         }
         Commands::Info => {
@@ -460,6 +596,7 @@ struct Config {
     /// The time when the info was last fetched
     info_fetch: Option<DateTime<Utc>>,
     info: Option<ServerInfo>,
+    download_directory: PathBuf,
 }
 
 impl Config {
@@ -473,6 +610,7 @@ impl Config {
                     login: None,
                     info_fetch: None,
                     info: None,
+                    download_directory: PathBuf::from(DEBUG_DOWNLOAD_DIR)
                 };
                 c.save().unwrap();
                 return Ok(c);
@@ -505,6 +643,7 @@ impl Config {
                         login: None,
                         info: None,
                         info_fetch: None,
+                        download_directory: PathBuf::from(directories::UserDirs::new().unwrap().download_dir().unwrap_or(Path::new("")))
                     };
                     c.save().unwrap();
 
