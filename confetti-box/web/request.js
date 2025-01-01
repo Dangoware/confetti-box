@@ -61,7 +61,20 @@ async function sendFiles(files, duration, maxSize) {
     const inProgressUploads = new Set();
     const concurrencyLimit = 10;
 
+    // Create a reference for the Wake Lock.
+    let wakeLock = null;
+
+    // create an async function to request a wake lock
+    try {
+        wakeLock = await navigator.wakeLock.request("screen");
+    } catch (err) {
+        console.warn("Failed to set wake-lock!");
+    }
+
+
     for (const file of files) {
+        console.log("Started upload for", file.name);
+
         // Start the upload and add it to the set of in-progress uploads
         const uploadPromise = uploadFile(file, duration, maxSize);
         inProgressUploads.add(uploadPromise);
@@ -77,6 +90,10 @@ async function sendFiles(files, duration, maxSize) {
 
     // Wait for any remaining uploads to complete
     await Promise.allSettled(inProgressUploads);
+
+    wakeLock.release().then(() => {
+        wakeLock = null;
+    });
 }
 
 async function uploadFile(file, duration, maxSize) {
