@@ -1,6 +1,6 @@
 [package]
 name = "confetti_box"
-version = "0.1.3"
+version = "0.2.0"
 repository = "https://github.com/Dangoware/confetti-box"
 license = "AGPL-3.0-or-later"
 authors.workspace = true
@@ -10,19 +10,18 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-blake3 = { version = "1.5.4", features = ["mmap", "rayon", "serde"] }
-chrono = { version = "0.4.38", features = ["serde"] }
-ciborium = "0.2.2"
+blake3 = { version = "1.5", features = ["mmap", "rayon", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+ciborium = "0.2"
 file-format = { version = "0.26", features = ["reader"] }
 log = "0.4"
-lz4_flex = "0.11.3"
 maud = { version = "0.26", features = ["rocket"] }
-rand = "0.8.5"
+rand = "0.8"
 rocket = { version = "0.5", features = ["json"] }
-rocket_ws = "0.1.1"
-serde = { version = "1.0.213", features = ["derive"] }
-serde_with = { version = "3.11.0", features = ["chrono_0_4"] }
-toml = "0.8.19"
-unidecode = "0.3.0"
-urlencoding = "2.1.3"
-uuid = { version = "1.11.0", features = ["serde", "v4"] }
+rocket_ws = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_with = { version = "3.11", features = ["chrono_0_4"] }
+toml = "0.8"
+unidecode = "0.3"
+urlencoding = "2.1"
+uuid = { version = "1.11", features = ["serde", "v4"] }

@@ -206,7 +206,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
         new_uri = "ws:";
     }
     new_uri += "//" + loc.host;
-    new_uri += loc.pathname + "/upload/websocket?name=" + file.name +"&size=" + file.size + "&duration=" + parseInt(duration);
+    new_uri += "/upload/websocket?name=" + file.name +"&size=" + file.size + "&duration=" + parseInt(duration);
     const socket = new WebSocket(new_uri);
 
     const chunkSize = 10_000_000;

@@ -2,7 +2,7 @@ use std::{
     collections::{hash_map::Values, HashMap, HashSet},
     ffi::OsStr,
     fs::{self, File},
-    io,
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
 };
@@ -48,10 +48,9 @@ impl Mochibase {
 
     /// Open the database from a path
     pub fn open<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
-        let file = File::open(path)?;
-        let mut lz4_file = lz4_flex::frame::FrameDecoder::new(file);
+        let mut file = File::open(path)?;
 
-        from_reader(&mut lz4_file)
+        from_reader(&mut file)
             .map_err(|e| io::Error::other(format!("failed to open database: {e}")))
     }
 
@@ -67,11 +66,10 @@ impl Mochibase {
     /// Save the database to its file
     pub fn save(&self) -> Result<(), io::Error> {
         // Create a file and write the LZ4 compressed stream into it
-        let file = File::create(self.path.with_extension("bkp"))?;
-        let mut lz4_file = lz4_flex::frame::FrameEncoder::new(file);
-        into_writer(self, &mut lz4_file)
+        let mut file = File::create(self.path.with_extension("bkp"))?;
+        into_writer(self, &mut file)
             .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
-        lz4_file.try_finish()?;
+        file.flush()?;
 
         fs::rename(self.path.with_extension("bkp"), &self.path).unwrap();
 

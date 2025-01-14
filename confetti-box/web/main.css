@@ -24,16 +24,23 @@ center {
 }
 
 footer {
-    display: flex;
-    width: fit-content;
+    div {
+        display: flex;
+        width: fit-content;
 
-    p {
-        border-right: 2px dotted grey;
-        padding: 0 10px;
+        p {
+            border-right: 2px dotted grey;
+            padding: 0 10px;
+        }
+
+        p:last-child {
+            border-right: none;
+        }
     }
 
-    p:last-child {
-        border-right: none;
+    p.version {
+        margin-top: 0;
+        opacity: 45%;
     }
 }
 
