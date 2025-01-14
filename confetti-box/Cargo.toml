@@ -19,6 +19,7 @@ lz4_flex = "0.11.3"
 maud = { version = "0.26", features = ["rocket"] }
 rand = "0.8.5"
 rocket = { version = "0.5", features = ["json"] }
+rocket_ws = "0.1.1"
 serde = { version = "1.0.213", features = ["derive"] }
 serde_with = { version = "3.11.0", features = ["chrono_0_4"] }
 toml = "0.8.19"

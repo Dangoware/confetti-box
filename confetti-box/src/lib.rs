@@ -20,7 +20,7 @@ use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
-    data::ToByteUnit, get, post, serde::{json::Json, Serialize}, tokio::{
+    data::ToByteUnit, futures::{SinkExt as _, StreamExt as _}, get, post, serde::{json::{self, Json}, Serialize}, tokio::{
         fs, io::{AsyncSeekExt, AsyncWriteExt}
     }, Data, State
 };
@@ -239,4 +239,113 @@ pub async fn chunked_upload_finish(
         .insert(&mmid, constructed_file.clone());
 
     Ok(Json(constructed_file))
+}
+
+#[get("/upload/websocket?<name>&<size>&<duration>")]
+pub async fn websocket_upload(
+    ws: rocket_ws::WebSocket,
+    main_db: &State<Arc<RwLock<Mochibase>>>,
+    chunk_db: &State<Arc<RwLock<Chunkbase>>>,
+    settings: &State<Settings>,
+    name: String,
+    size: u64,
+    duration: i64, // Duration in seconds
+) -> Result<rocket_ws::Channel<'static>, Json<ChunkedResponse>> {
+    let max_filesize = settings.max_filesize;
+    let expire_duration = TimeDelta::seconds(duration);
+    if size > max_filesize {
+        return Err(Json(ChunkedResponse::failure("File too large")));
+    }
+    if settings.duration.restrict_to_allowed
+        && !settings
+            .duration
+            .allowed
+            .contains(&expire_duration)
+    {
+        return Err(Json(ChunkedResponse::failure("Duration not allowed")));
+    }
+    if expire_duration > settings.duration.maximum {
+        return Err(Json(ChunkedResponse::failure("Duration too large")));
+    }
+
+    let file_info = ChunkedInfo {
+        name,
+        size,
+        expire_duration,
+        ..Default::default()
+    };
+
+    let uuid = chunk_db.write().unwrap().new_file(
+        file_info,
+        &settings.temp_dir,
+        TimeDelta::seconds(30)
+    ).map_err(|e| Json(ChunkedResponse::failure(e.to_string().as_str())))?;
+    let info = chunk_db.read().unwrap().get_file(&uuid).unwrap().clone();
+
+    let chunk_db = Arc::clone(chunk_db);
+    let main_db = Arc::clone(main_db);
+    let file_dir = settings.file_dir.clone();
+    let mut file = fs::File::create(&info.1.path).await.unwrap();
+
+    Ok(ws.channel(move |mut stream| Box::pin(async move {
+        let mut offset = 0;
+        let mut hasher = blake3::Hasher::new();
+        while let Some(message) = stream.next().await {
+            if let Ok(m) = message.as_ref() {
+                if m.is_empty() {
+                    // We're finished here
+                    break;
+                }
+            }
+
+            let message = message.unwrap().into_data();
+            offset += message.len() as u64;
+            if (offset > info.1.size) | (offset > max_filesize) {
+                break
+            }
+
+            hasher.update(&message);
+
+            stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&offset).unwrap())).await.unwrap();
+
+            file.write_all(&message).await.unwrap();
+            file.flush().await?;
+
+            chunk_db.write().unwrap().extend_timeout(&uuid, TimeDelta::seconds(30));
+        }
+
+        let now = Utc::now();
+        let hash = hasher.finalize();
+        let new_filename = file_dir.join(hash.to_string());
+
+        // If the hash does not exist in the database,
+        // move the file to the backend, else, delete it
+        // This also removes it from the chunk database
+        if main_db.read().unwrap().get_hash(&hash).is_none() {
+            chunk_db.write().unwrap().move_and_remove_file(&uuid, &new_filename)?;
+        } else {
+            chunk_db.write().unwrap().remove_file(&uuid)?;
+        }
+
+        let mmid = Mmid::new_random();
+        let file_type = file_format::FileFormat::from_file(&new_filename).unwrap();
+
+        let constructed_file = MochiFile::new(
+            mmid.clone(),
+            info.1.name,
+            file_type.media_type().to_string(),
+            hash,
+            now,
+            now + info.1.expire_duration,
+        );
+
+        main_db
+            .write()
+            .unwrap()
+            .insert(&mmid, constructed_file.clone());
+
+        stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&constructed_file).unwrap())).await?;
+
+        Ok(())
+    })))
 }

@@ -72,11 +72,19 @@ async function sendFiles(files, duration, maxSize) {
     }
 
 
+    let start = performance.now();
     for (const file of files) {
         console.log("Started upload for", file.name);
 
         // Start the upload and add it to the set of in-progress uploads
-        const uploadPromise = uploadFile(file, duration, maxSize);
+        let uploadPromise;
+        if ('WebSocket' in window && window.WebSocket.CLOSING === 2) {
+            console.log("Uploading file using Websockets");
+            uploadPromise = uploadFileWebsocket(file, duration, maxSize);
+        } else {
+            console.log("Uploading file using Chunks");
+            uploadPromise = uploadFileChunked(file, duration, maxSize);
+        }
         inProgressUploads.add(uploadPromise);
 
         // Once an upload finishes, remove it from the set
@@ -90,13 +98,15 @@ async function sendFiles(files, duration, maxSize) {
 
     // Wait for any remaining uploads to complete
     await Promise.allSettled(inProgressUploads);
+    let end = performance.now();
+    console.log(end - start);
 
     wakeLock.release().then(() => {
         wakeLock = null;
     });
 }
 
-async function uploadFile(file, duration, maxSize) {
+async function uploadFileChunked(file, duration, maxSize) {
     const [linkRow, progressBar, progressText] = await addNewToList(file.name);
     if (file.size > maxSize) {
         console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
@@ -168,7 +178,64 @@ async function uploadFile(file, duration, maxSize) {
 
     // Finish the request and update the progress box
     const result = await fetch("/upload/chunked/" + chunkedResponse.uuid + "?finish");
-    uploadComplete(result, progressBar, progressText, linkRow);
+    let responseJson = null;
+    if (result.status == 200) {
+        responseJson = await result.json()
+    }
+    uploadComplete(responseJson, result.status, progressBar, progressText, linkRow);
+}
+
+async function uploadFileWebsocket(file, duration, maxSize) {
+
+    const [linkRow, progressBar, progressText] = await addNewToList(file.name);
+    if (file.size > maxSize) {
+        console.error("Provided file is too large", file.size, "bytes; max", maxSize, "bytes");
+        makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
+        return;
+    } else if (file.size == 0) {
+        console.error("Provided file has 0 bytes");
+        makeErrored(progressBar, progressText, linkRow, ZERO_TEXT);
+        return;
+    }
+
+    // Open the websocket connection
+    let loc = window.location, new_uri;
+    if (loc.protocol === "https:") {
+        new_uri = "wss:";
+    } else {
+        new_uri = "ws:";
+    }
+    new_uri += "//" + loc.host;
+    new_uri += loc.pathname + "/upload/websocket?name=" + file.name +"&size=" + file.size + "&duration=" + parseInt(duration);
+    const socket = new WebSocket(new_uri);
+
+    const chunkSize = 10_000_000;
+    socket.addEventListener("open", (_event) => {
+        for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkSize) + 1; chunk_num ++) {
+            const offset = Math.floor(chunk_num * chunkSize);
+            const chunk = file.slice(offset, offset + chunkSize);
+
+            socket.send(chunk);
+        }
+
+        socket.send("");
+    });
+
+    return new Promise(function(resolve, reject) {
+        socket.addEventListener("message", (event) => {
+            const response = JSON.parse(event.data);
+            if (response.mmid == null) {
+                const progress = parseInt(response);
+                uploadProgressWebsocket(progress, progressBar, progressText, file.size);
+            } else {
+                // It's so over
+                socket.close();
+
+                uploadComplete(response, 200, progressBar, progressText, linkRow);
+                resolve();
+            }
+        });
+    });
 }
 
 async function addNewToList(origFileName) {
@@ -204,12 +271,23 @@ function uploadProgress(progress, progressBar, progressText, progressValues, fil
     }
 }
 
-async function uploadComplete(response, progressBar, progressText, linkRow) {
-    if (response.status === 200) {
-        const responseJson = await response.json();
+function uploadProgressWebsocket(bytesFinished, progressBar, progressText, fileSize) {
+    const progressPercent = Math.floor((bytesFinished / fileSize) * 100);
+    if (progressPercent == 100) {
+        progressBar.removeAttribute("value");
+        progressText.textContent = "⏳";
+    } else {
+        progressBar.value = bytesFinished;
+        progressBar.max = fileSize;
+        progressText.textContent = progressPercent + "%";
+    }
+}
+
+async function uploadComplete(responseJson, status, progressBar, progressText, linkRow) {
+    if (status === 200) {
         console.log("Successfully uploaded file", responseJson);
         makeFinished(progressBar, progressText, linkRow, responseJson);
-    } else if (response.status === 413) {
+    } else if (status === 413) {
         makeErrored(progressBar, progressText, linkRow, TOO_LARGE_TEXT);
     } else {
         makeErrored(progressBar, progressText, linkRow, ERROR_TEXT);

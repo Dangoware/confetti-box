@@ -80,6 +80,7 @@ async fn main() {
                 confetti_box::chunked_upload_start,
                 confetti_box::chunked_upload_continue,
                 confetti_box::chunked_upload_finish,
+                confetti_box::websocket_upload,
                 endpoints::server_info,
                 endpoints::file_info,
                 endpoints::lookup_mmid,
