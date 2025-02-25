@@ -343,6 +343,8 @@ pub async fn websocket_upload(
             .unwrap()
             .insert(&mmid, constructed_file.clone());
 
+        file.flush().await.unwrap();
+
         stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&constructed_file).unwrap())).await?;
 
         Ok(())
