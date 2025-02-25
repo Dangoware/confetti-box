@@ -309,7 +309,6 @@ pub async fn websocket_upload(
             stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&offset).unwrap())).await.unwrap();
 
             file.write_all(&message).await.unwrap();
-            file.flush().await?;
 
             chunk_db.write().unwrap().extend_timeout(&uuid, TimeDelta::seconds(30));
         }

@@ -377,7 +377,7 @@ impl Chunkbase {
     }
 
     pub fn get_file(&self, uuid: &Uuid) -> Option<&(DateTime<Utc>, ChunkedInfo)> {
-        self.chunks.get(&uuid)
+        self.chunks.get(uuid)
     }
 
     pub fn remove_file(&mut self, uuid: &Uuid) -> Result<bool, io::Error> {
