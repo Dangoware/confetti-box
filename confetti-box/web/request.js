@@ -17,6 +17,11 @@ async function formSubmit() {
 }
 
 async function dragDropSubmit(evt) {
+    fileButton.style.backgroundColor = "#84E5FF";
+    fileButton.style.removeProperty("transitionDuration");
+    fileButton.style.removeProperty("scale");
+    fileButton.style.removeProperty("transitionTimingFunction");
+
     const form = document.getElementById("uploadForm");
     const duration = form.elements.duration.value;
     const maxSize = form.elements.fileUpload.dataset.maxFilesize;
@@ -101,9 +106,13 @@ async function sendFiles(files, duration, maxSize) {
     let end = performance.now();
     console.log(end - start);
 
-    wakeLock.release().then(() => {
-        wakeLock = null;
-    });
+    try {
+        wakeLock.release().then(() => {
+            wakeLock = null;
+        });
+    } catch (err) {
+        console.warn("Failed to modify wake-lock!");
+    }
 }
 
 async function uploadFileChunked(file, duration, maxSize) {
@@ -209,7 +218,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
     new_uri += "/upload/websocket?name=" + file.name +"&size=" + file.size + "&duration=" + parseInt(duration);
     const socket = new WebSocket(new_uri);
 
-    const chunkSize = 10_000_000;
+    const chunkSize = 5_000_000;
     socket.addEventListener("open", (_event) => {
         for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkSize) + 1; chunk_num ++) {
             const offset = Math.floor(chunk_num * chunkSize);
@@ -359,7 +368,20 @@ document.addEventListener("DOMContentLoaded", function(_event) {
     let fileButton = document.getElementById("fileButton");
     document.addEventListener("drop", (e) => {e.preventDefault();}, false);
     document.addEventListener("dragover", (e) => {e.preventDefault()}, false);
-    fileButton.addEventListener("dragover", (e) => {e.preventDefault();}, false);
+    fileButton.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        fileButton.style.backgroundColor = "#9cff7e";
+        fileButton.style.transitionDuration = "0.5s";
+        fileButton.style.scale = "1.1";
+        fileButton.style.transitionTimingFunction = "cubic-bezier(.23,-0.09,.52,1.62)";
+    }, false);
+    fileButton.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        fileButton.style.backgroundColor = "#84E5FF";
+        fileButton.style.removeProperty("transitionDuration");
+        fileButton.style.removeProperty("scale");
+        fileButton.style.removeProperty("transitionTimingFunction");
+    }, false);
     fileButton.addEventListener("drop", dragDropSubmit, false);
 
     initEverything();
