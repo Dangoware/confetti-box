@@ -55,7 +55,7 @@ hr {
 
 h1 {
     font-size: 3em;
-    font-weight: bolder;
+    font-weight: bold;
 }
 
 p {
@@ -75,6 +75,7 @@ button {
     cursor: pointer;
     margin: 5px;
     border-radius: 5px;
+    color: black;
 }
 
 button.button {
@@ -209,12 +210,15 @@ h2 code {
 .upload_failed {
     color: black;
     background-color: #ffb2ae;
+
     a:link {
         all: revert;
     }
+
     a:visited {
         all: revert;
     }
+
     a:hover {
         all: revert;
     }

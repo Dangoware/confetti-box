@@ -1,6 +1,6 @@
 [package]
 name = "confetti_box"
-version = "0.2.1"
+version = "0.2.2"
 repository = "https://github.com/Dangoware/confetti-box"
 license = "AGPL-3.0-or-later"
 authors.workspace = true
@@ -16,7 +16,7 @@ chrono = { version = "0.4", features = ["serde"] }
 ciborium = "0.2"
 file-format = { version = "0.26", features = ["reader"] }
 log = "0.4"
-maud = { version = "0.26", features = ["rocket"] }
+maud = { version = "0.27", features = ["rocket"] }
 rand = "0.8"
 rocket = { version = "0.5", features = ["json"] }
 rocket_ws = "0.1"
