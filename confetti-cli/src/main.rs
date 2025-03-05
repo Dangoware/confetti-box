@@ -7,7 +7,7 @@ use owo_colors::OwoColorize;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{fs::{create_dir, File}, io::{AsyncReadExt, AsyncWriteExt}, task::JoinSet};
+use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, task::JoinSet};
 use uuid::Uuid;
 use clap::{arg, builder::{styling::RgbColor, Styles}, Parser, Subcommand};
 use anyhow::{anyhow, bail, Context as _, Result};

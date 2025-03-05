@@ -1,6 +1,6 @@
 [package]
 name = "confetti_box"
-version = "0.2.1"
+version = "0.2.2"
 repository = "https://github.com/Dangoware/confetti-box"
 license = "AGPL-3.0-or-later"
 authors.workspace = true
