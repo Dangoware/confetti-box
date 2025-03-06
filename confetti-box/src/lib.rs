@@ -35,6 +35,7 @@ pub fn home(settings: &State<Settings>) -> Markup {
         center {
             h1 { "Confetti-Box 🎉" }
             h2 { "Files up to " (settings.max_filesize.bytes()) " in size are allowed!" }
+            noscript { "Javascript must be enabled for this site to function!" }
             hr;
             button.main_file_upload #fileButton onclick="document.getElementById('fileInput').click()" {
                 h4 { "Upload File(s)" }

@@ -3,6 +3,8 @@
 const TOO_LARGE_TEXT = "Too large!";
 const ZERO_TEXT = "File is blank!";
 const ERROR_TEXT = "Error!";
+const USERAGENT = navigator.userAgent;
+const USE_CHUNKS_COMPAT = /Ladybird/.test(USERAGENT);
 
 async function formSubmit() {
     const form = document.getElementById("uploadForm");
@@ -63,19 +65,20 @@ async function pasteSubmit(evt) {
 }
 
 async function sendFiles(files, duration, maxSize) {
+    if (USE_CHUNKS_COMPAT) {
+        console.warn("This browser is known to have problems with WebSockets, falling back to chunked upload");
+    }
+
     const inProgressUploads = new Set();
     const concurrencyLimit = 10;
 
-    // Create a reference for the Wake Lock.
+    // Try to get a wake-lock
     let wakeLock = null;
-
-    // create an async function to request a wake lock
     try {
         wakeLock = await navigator.wakeLock.request("screen");
     } catch (err) {
         console.warn("Failed to set wake-lock!");
     }
-
 
     let start = performance.now();
     for (const file of files) {
@@ -83,7 +86,7 @@ async function sendFiles(files, duration, maxSize) {
 
         // Start the upload and add it to the set of in-progress uploads
         let uploadPromise;
-        if ('WebSocket' in window && window.WebSocket.CLOSING === 2) {
+        if ('WebSocket' in window && window.WebSocket.CLOSING === 2 && !USE_CHUNKS_COMPAT) {
             console.log("Uploading file using Websockets");
             uploadPromise = uploadFileWebsocket(file, duration, maxSize);
         } else {
@@ -230,7 +233,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
         socket.send("");
     });
 
-    return new Promise(function(resolve, reject) {
+    return new Promise(function(resolve, _reject) {
         socket.addEventListener("message", (event) => {
             const response = JSON.parse(event.data);
             if (response.mmid == null) {

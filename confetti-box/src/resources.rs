@@ -31,7 +31,12 @@ pub fn form_handler_js() -> RawJavaScript<&'static str> {
     RawJavaScript(include_str!("../web/request.js"))
 }
 
-#[get("/resources/favicon.svg")]
-pub fn favicon() -> (ContentType, &'static str) {
+#[get("/favicon.svg")]
+pub fn favicon_svg() -> (ContentType, &'static str) {
     (ContentType::SVG, include_str!("../web/favicon.svg"))
+}
+
+#[get("/favicon.ico")]
+pub fn favicon_ico() -> (ContentType, &'static [u8]) {
+    (ContentType::Icon, include_bytes!("../web/favicon.ico"))
 }
