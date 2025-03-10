@@ -1,6 +1,6 @@
 [package]
 name = "confetti_cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "A simple command line interface to interact with a Confetti-Box instance."
 repository = "https://github.com/Dangoware/confetti-box"
 keywords = ["selfhost", "upload", "command_line"]
