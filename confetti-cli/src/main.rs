@@ -305,7 +305,7 @@ async fn main() -> Result<()> {
                     url
                 };
 
-                if !url.starts_with("https://") || !url.starts_with("http://") {
+                if !url.starts_with("https://") && !url.starts_with("http://") {
                     config.url = ("https://".to_owned() + url).to_string();
                 } else {
                     config.url = url.to_string();
