@@ -53,7 +53,7 @@ enum Commands {
         /// Set the password for a server which requires login
         #[arg(short, long, required = false)]
         password: Option<String>,
-        /// Set the URL of the server to connect to
+        /// Set the URL of the server to connect to (assumes https://)
         #[arg(long, required = false)]
         url: Option<String>,
         /// Set the directory to download into by default
@@ -305,7 +305,12 @@ async fn main() -> Result<()> {
                     url
                 };
 
-                config.url = url.to_string();
+                if !url.starts_with("https://") && !url.starts_with("http://") {
+                    config.url = ("https://".to_owned() + url).to_string();
+                } else {
+                    config.url = url.to_string();
+                }
+
                 config.save().unwrap();
                 println!("URL set to \"{url}\"");
             }
