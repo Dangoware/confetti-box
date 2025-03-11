@@ -1,4 +1,4 @@
-use std::{error::Error, fs, io::{self, Read, Write}, os::unix::fs::MetadataExt, path::{Path, PathBuf}};
+use std::{error::Error, fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 
 use chrono::{DateTime, Datelike, Local, Month, TimeDelta, Timelike, Utc};
 
@@ -371,7 +371,7 @@ async fn upload_file<P: AsRef<Path>>(
     login: &Option<Login>,
 ) -> Result<MochiFile, UploadError> {
     let mut file = File::open(path).await.unwrap();
-    let size = file.metadata().await.unwrap().size() as u64;
+    let size = file.metadata().await.unwrap().len() as u64;
 
     let ChunkedResponse {status, message, uuid, chunk_size} = {
         client.post(format!("{url}/upload/chunked/"))
