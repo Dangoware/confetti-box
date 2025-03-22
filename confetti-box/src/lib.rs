@@ -301,7 +301,7 @@ pub async fn websocket_upload(
 
             let message = message.unwrap().into_data();
             offset += message.len() as u64;
-            if (offset >= info.1.size) | (offset > max_filesize) {
+            if (offset > info.1.size) | (offset > max_filesize) {
                 break
             }
 
