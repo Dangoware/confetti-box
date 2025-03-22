@@ -222,6 +222,12 @@ async function uploadFileWebsocket(file, duration, maxSize) {
     const socket = new WebSocket(new_uri);
     socket.binaryType = "arraybuffer";
 
+    // Ensure that the websocket gets closed if the page is unloaded
+    window.onbeforeunload = function() {
+        socket.onclose = function () {};
+        socket.close();
+    };
+
     const chunkSize = 5_000_000;
     socket.addEventListener("open", (_event) => {
         for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkSize) + 1; chunk_num ++) {
