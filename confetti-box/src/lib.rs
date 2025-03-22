@@ -307,7 +307,7 @@ pub async fn websocket_upload(
 
             hasher.update(&message);
 
-            stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&offset).unwrap())).await.unwrap();
+            stream.send(rocket_ws::Message::binary(offset.to_le_bytes().as_slice())).await.unwrap();
 
             file.write_all(&message).await.unwrap();
 
@@ -347,6 +347,7 @@ pub async fn websocket_upload(
         file.flush().await.unwrap();
 
         stream.send(rocket_ws::Message::Text(json::serde_json::ser::to_string(&constructed_file).unwrap())).await?;
+        stream.close(None).await?;
 
         Ok(())
     })))

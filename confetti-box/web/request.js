@@ -220,6 +220,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
     new_uri += "//" + loc.host;
     new_uri += "/upload/websocket?name=" + file.name +"&size=" + file.size + "&duration=" + parseInt(duration);
     const socket = new WebSocket(new_uri);
+    socket.binaryType = "arraybuffer";
 
     const chunkSize = 5_000_000;
     socket.addEventListener("open", (_event) => {
@@ -235,14 +236,18 @@ async function uploadFileWebsocket(file, duration, maxSize) {
 
     return new Promise(function(resolve, _reject) {
         socket.addEventListener("message", (event) => {
-            const response = JSON.parse(event.data);
-            if (response.mmid == null) {
-                const progress = parseInt(response);
+            if (event.data instanceof ArrayBuffer) {
+                const view = new DataView(event.data);
+                console.log(view.getBigUint64(0, true));
+                const progress = parseInt(view.getBigUint64(0, true));
                 uploadProgressWebsocket(progress, progressBar, progressText, file.size);
             } else {
                 // It's so over
-                socket.close();
+                if (!socket.CLOSED) {
+                    socket.close();
+                }
 
+                const response = JSON.parse(event.data);
                 uploadComplete(response, 200, progressBar, progressText, linkRow);
                 resolve();
             }
