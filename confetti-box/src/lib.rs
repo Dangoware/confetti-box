@@ -24,6 +24,7 @@ use rocket::{
         fs, io::{AsyncSeekExt, AsyncWriteExt}
     }, Data, State
 };
+use strings::{BreakStyle, TimeGranularity};
 use uuid::Uuid;
 
 #[get("/")]
@@ -47,7 +48,7 @@ pub fn home(settings: &State<Settings>) -> Markup {
                     button.button.{@if settings.duration.default == *d { "selected" }}
                     data-duration-seconds=(d.num_seconds())
                     {
-                        (PreEscaped(to_pretty_time(d.num_seconds() as u32)))
+                        (PreEscaped(to_pretty_time(d.num_seconds() as u32, BreakStyle::Break, TimeGranularity::Seconds)))
                     }
                 }
             }

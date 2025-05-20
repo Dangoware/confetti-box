@@ -3,14 +3,15 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use chrono::Utc;
+use maud::{html, Markup, DOCTYPE};
 use rocket::{
     get, http::ContentType, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::{self, fs::File}, uri, Request, State
 };
 use serde::Serialize;
 
 use crate::{
-    database::{Mmid, MochiFile, Mochibase},
-    settings::Settings,
+    database::{Mmid, MochiFile, Mochibase}, settings::Settings, strings::{to_pretty_size, to_pretty_time, BreakStyle, TimeGranularity}
 };
 
 /// An endpoint to obtain information about the server's capabilities
@@ -37,6 +38,37 @@ pub async fn file_info(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Option
     let entry = db.read().unwrap().get(&mmid).cloned()?;
 
     Some(Json(entry))
+}
+
+#[get("/info/<mmid>?opengraph")]
+pub async fn file_info_opengraph(
+    db: &State<Arc<RwLock<Mochibase>>>,
+    settings: &State<Settings>,
+    mmid: &str,
+) -> Option<Markup> {
+    let mmid: Mmid = mmid.try_into().ok()?;
+    let entry = db.read().unwrap().get(&mmid).cloned()?;
+
+    let file = File::open(settings.file_dir.join(entry.hash().to_string()))
+        .await
+        .ok()?;
+
+    let size = to_pretty_size(file.metadata().await.ok()?.len());
+
+    let seconds_till_expiry = entry.expiry().signed_duration_since(Utc::now()).num_seconds();
+    let expiry = to_pretty_time(seconds_till_expiry as u32, BreakStyle::Space, TimeGranularity::Minutes);
+
+    let title = entry.name().clone() + " - " + &size + " - " + &expiry;
+
+    Some(html! {
+        (DOCTYPE)
+        meta charset="UTF-8";
+        title { (title) }
+        link rel="icon" type="image/svg+xml" href="/favicon.svg";
+        meta property="og:title" content=(title);
+        meta property="twitter:title" content=(title);
+        meta property="og:description" content={"Size: " (size) ", expires in " (expiry)};
+    })
 }
 
 #[derive(Serialize, Debug)]

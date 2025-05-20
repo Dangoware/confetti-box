@@ -84,6 +84,7 @@ async fn main() {
                 confetti_box::websocket_upload,
                 endpoints::server_info,
                 endpoints::file_info,
+                endpoints::file_info_opengraph,
                 endpoints::lookup_mmid,
                 endpoints::lookup_mmid_noredir,
                 endpoints::lookup_mmid_name,
