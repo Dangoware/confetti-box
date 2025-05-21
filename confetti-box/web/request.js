@@ -70,7 +70,7 @@ async function sendFiles(files, duration, maxSize) {
     }
 
     const inProgressUploads = new Set();
-    const concurrencyLimit = 10;
+    const concurrencyLimit = 3;
 
     // Try to get a wake-lock
     let wakeLock = null;
