@@ -60,6 +60,11 @@ pub async fn file_info_opengraph(
 
     let title = entry.name().clone() + " - " + &size + " - " + &expiry;
 
+    let url = uri!(lookup_mmid_name(
+        mmid.to_string(),
+        entry.name()
+    )).to_string();
+
     Some(html! {
         (DOCTYPE)
         meta charset="UTF-8";
@@ -68,6 +73,12 @@ pub async fn file_info_opengraph(
         meta property="og:title" content=(title);
         meta property="twitter:title" content=(title);
         meta property="og:description" content={"Size: " (size) ", expires in " (expiry)};
+
+        body {
+            script {
+                "window.location.href = '" (url) "';"
+            }
+        }
     })
 }
 

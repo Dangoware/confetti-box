@@ -17,13 +17,10 @@ pub fn head(page_title: &str) -> Markup {
 }
 
 pub fn footer() -> Markup {
-    let hash = match option_env!("VERGEN_GIT_SHA") {
-        Some(hash) => &hash[0..7],
-        None => "",
-    };
+    let hash = option_env!("VERGEN_GIT_SHA").map(|h| &h[0..7]);
 
     let pkg_version = env!("CARGO_PKG_VERSION");
-    let hash_link = "https://github.com/Dangoware/confetti-box/commit/".to_string() + hash;
+    let build_date = option_env!("VERGEN_BUILD_DATE").unwrap_or_default();
 
     html! {
         footer {
@@ -36,8 +33,8 @@ pub fn footer() -> Markup {
             }
             p.version { "Running Confetti-Box v" (pkg_version) " " }
 
-            @if !hash.is_empty() {
-                p.version style="font-size: 0.8em" { "(" a style="font-family:'Fira Code'" href=(hash_link) {(hash)} " - " (env!("VERGEN_BUILD_DATE")) ")" }
+            @if let Some(h) = hash {
+                p.version style="font-size: 0.8em" { "(" a style="font-family:'Fira Code'" href={"https://github.com/Dangoware/confetti-box/commit/" (h)} {(h)} " - " (build_date) ")" }
             }
         }
     }
