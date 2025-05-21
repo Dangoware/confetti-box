@@ -56,6 +56,7 @@ pub async fn file_info_opengraph(
     let size = to_pretty_size(file.metadata().await.ok()?.len());
 
     let seconds_till_expiry = entry.expiry().signed_duration_since(Utc::now()).num_seconds();
+    let expiry_unix_timestamp = entry.expiry().timestamp();
     let expiry = to_pretty_time(seconds_till_expiry as u32, BreakStyle::Space, TimeGranularity::Minutes);
 
     let title = entry.name().clone() + " - " + &size + " - " + &expiry;
@@ -72,7 +73,7 @@ pub async fn file_info_opengraph(
         link rel="icon" type="image/svg+xml" href="/favicon.svg";
         meta property="og:title" content=(title);
         meta property="twitter:title" content=(title);
-        meta property="og:description" content={"Size: " (size) ", expires in " (expiry)};
+        meta property="og:description" content={"Size: " (size) ", expires in " (expiry) "\n<t:" (expiry_unix_timestamp) ":R>"};
 
         body {
             script {
