@@ -1,33 +1,31 @@
+mod schema;
+
 use std::{
     collections::{hash_map::Values, HashMap, HashSet},
     ffi::OsStr,
     fs::{self, File},
     io::{self, Write},
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use blake3::Hash;
-use chrono::{DateTime, TimeDelta, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
 use ciborium::{from_reader, into_writer};
+use diesel::{prelude::Queryable, Selectable};
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     form::{self, FromFormField, ValueField},
     serde::{Deserialize, Serialize},
 };
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::serde_as;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Mochibase {
     path: PathBuf,
-
-    /// Every hash in the database along with the [`Mmid`]s associated with them
-    hashes: HashMap<Hash, HashSet<Mmid>>,
-
-    /// All entries in the database
-    entries: HashMap<Mmid, MochiFile>,
+    /// connection to the db
+    db: Arc<Mutex<diesel::sqlite::SqliteConnection>>,
 }
 
 impl Mochibase {
@@ -150,8 +148,10 @@ impl Mochibase {
 }
 
 /// An entry in the database storing metadata about a file
-#[serde_as]
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Queryable, Selectable)]
+#[diesel(table_name = crate::database::schema::mochifiles)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MochiFile {
     /// A unique identifier describing this file
     mmid: Mmid,
@@ -163,15 +163,15 @@ pub struct MochiFile {
     mime_type: String,
 
     /// The Blake3 hash of the file
-    #[serde_as(as = "DisplayFromStr")]
-    hash: Hash,
+    hash: String,
 
     /// The datetime when the file was uploaded
-    upload_datetime: DateTime<Utc>,
+    upload_datetime: chrono::NaiveDateTime,
 
     /// The datetime when the file is set to expire
-    expiry_datetime: DateTime<Utc>,
+    expiry_datetime: chrono::NaiveDateTime,
 }
+
 
 impl MochiFile {
     /// Create a new file that expires in `expiry`.
@@ -179,9 +179,9 @@ impl MochiFile {
         mmid: Mmid,
         name: String,
         mime_type: String,
-        hash: Hash,
-        upload: DateTime<Utc>,
-        expiry: DateTime<Utc>,
+        hash: String,
+        upload: NaiveDateTime,
+        expiry: NaiveDateTime,
     ) -> Self {
         Self {
             mmid,
@@ -197,16 +197,16 @@ impl MochiFile {
         &self.name
     }
 
-    pub fn expiry(&self) -> DateTime<Utc> {
+    pub fn expiry(&self) -> NaiveDateTime {
         self.expiry_datetime
     }
 
     pub fn is_expired(&self) -> bool {
         let datetime = Utc::now();
-        datetime > self.expiry_datetime
+        datetime > self.expiry_datetime.and_utc()
     }
 
-    pub fn hash(&self) -> &Hash {
+    pub fn hash(&self) -> &String {
         &self.hash
     }
 
@@ -218,6 +218,8 @@ impl MochiFile {
         &self.mime_type
     }
 }
+
+
 
 /// Clean the database. Removes files which are past their expiry
 /// [`chrono::DateTime`]. Also removes files which no longer exist on the disk.
@@ -262,7 +264,8 @@ pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
 
 /// A unique identifier for an entry in the database, 8 characters long,
 /// consists of ASCII alphanumeric characters (`a-z`, `A-Z`, and `0-9`).
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Deserialize, Serialize)]
+#[derive(diesel_derive_newtype::DieselNewType)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash, Serialize, Deserialize)]
 pub struct Mmid(String);
 
 impl Mmid {

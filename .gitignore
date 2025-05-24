@@ -8,3 +8,6 @@ settings.toml
 test/
 
 Cargo.lock
+
+.env
+*.db
