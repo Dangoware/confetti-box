@@ -1,18 +1,12 @@
-mod schema;
+pub mod schema;
 
 use std::{
-    collections::{hash_map::Values, HashMap, HashSet},
-    ffi::OsStr,
-    fs::{self, File},
-    io::{self, Write},
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex, RwLock},
+    collections::{HashMap, HashSet}, ffi::OsStr, fs::{self}, io::{self}, path::{Path, PathBuf}, str::FromStr, sync::{Arc, Mutex, RwLock}
 };
 
 use blake3::Hash;
 use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
-use ciborium::{from_reader, into_writer};
-use diesel::{prelude::Queryable, Selectable};
+use dotenvy::dotenv;
 use log::{error, info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
@@ -22,74 +16,45 @@ use rocket::{
 use serde_with::serde_as;
 use uuid::Uuid;
 
+use diesel::prelude::*;
+
 pub struct Mochibase {
     path: PathBuf,
     /// connection to the db
-    db: Arc<Mutex<diesel::sqlite::SqliteConnection>>,
+    db: Arc<Mutex<SqliteConnection>>,
 }
 
 impl Mochibase {
-    /// Create a new database initialized with no data, and save it to the
-    /// provided path
-    pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
-        let output = Self {
-            path: path.as_ref().to_path_buf(),
-            entries: HashMap::new(),
-            hashes: HashMap::new(),
-        };
-
-        // Save the database initially after creating it
-        output.save()?;
-
-        Ok(output)
-    }
-
-    /// Open the database from a path
-    pub fn open<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
-        let mut file = File::open(path)?;
-
-        from_reader(&mut file)
-            .map_err(|e| io::Error::other(format!("failed to open database: {e}")))
-    }
-
     /// Open the database from a path, **or create it if it does not exist**
-    pub fn open_or_new<P: AsRef<Path>>(path: &P) -> Result<Self, io::Error> {
-        if !path.as_ref().exists() {
-            Self::new(path)
-        } else {
-            Self::open(path)
-        }
-    }
-
-    /// Save the database to its file
-    pub fn save(&self) -> Result<(), io::Error> {
-        // Create a file and write the LZ4 compressed stream into it
-        let mut file = File::create(self.path.with_extension("bkp"))?;
-        into_writer(self, &mut file)
-            .map_err(|e| io::Error::other(format!("failed to save database: {e}")))?;
-        file.flush()?;
-
-        fs::rename(self.path.with_extension("bkp"), &self.path).unwrap();
-
-        Ok(())
+    pub fn open_or_new<P: AsRef<str>>(path: &P) -> Result<Self, io::Error> {
+        dotenv().ok();
+        let connection = SqliteConnection::establish(path.as_ref())
+            .unwrap_or_else(|e| panic!("Failed to connect, error: {}", e));
+        Ok(
+            Self {
+                path: PathBuf::from_str(path.as_ref()).unwrap(),
+                db: Arc::new(Mutex::new(connection))
+            }
+        )
     }
 
     /// Insert a [`MochiFile`] into the database.
     ///
     /// If the database already contained this value, then `false` is returned.
-    pub fn insert(&mut self, mmid: &Mmid, entry: MochiFile) -> bool {
-        if let Some(s) = self.hashes.get_mut(&entry.hash) {
-            // If the database already contains the hash, make sure the file is unique
-            if !s.insert(mmid.clone()) {
-                return false;
-            }
-        } else {
-            // If the database does not contain the hash, create a new set for it
-            self.hashes
-                .insert(entry.hash, HashSet::from([mmid.clone()]));
-        }
+    pub fn insert(&mut self, mmid_: &Mmid, entry: MochiFile) -> bool {
+        use schema::mochifiles::dsl::*;
 
-        self.entries.insert(mmid.clone(), entry.clone());
+        let hash_matched_mmids: Vec<Mmid> = mochifiles
+            .filter(hash.eq(entry.hash()))
+            .select(mmid)
+            .load(&mut *self.db.lock().unwrap())
+            .expect("Error getting mmids");
+
+        // If the database already contains the hash, make sure the file is unique
+        if hash_matched_mmids.contains(mmid_) {
+                return false;
+        }
+        entry.insert_into(mochifiles).on_conflict_do_nothing();
 
         true
     }
@@ -97,19 +62,14 @@ impl Mochibase {
     /// Remove an [`Mmid`] from the database entirely.
     ///
     /// If the database did not contain this value, then `false` is returned.
-    pub fn remove_mmid(&mut self, mmid: &Mmid) -> bool {
-        let hash = if let Some(h) = self.entries.get(mmid).map(|e| e.hash) {
-            self.entries.remove(mmid);
-            h
+    pub fn remove_mmid(&mut self, mmid_: &Mmid) -> bool {
+        use schema::mochifiles::dsl::*;
+
+        if diesel::delete(mochifiles.filter(mmid.eq(mmid_))).execute(&mut *self.db.lock().unwrap()).expect("Error deleting posts") > 0 {
+            true
         } else {
-            return false;
-        };
-
-        if let Some(s) = self.hashes.get_mut(&hash) {
-            s.remove(mmid);
+            false
         }
-
-        true
     }
 
     /// Remove a hash from the database entirely.
@@ -134,21 +94,29 @@ impl Mochibase {
     }
 
     /// Get an entry by its [`Mmid`]. Returns [`None`] if the value does not exist.
-    pub fn get(&self, mmid: &Mmid) -> Option<&MochiFile> {
-        self.entries.get(mmid)
+    pub fn get(&self, mmid_: &Mmid) -> Option<MochiFile> {
+        use schema::mochifiles::dsl::*;
+        mochifiles.filter(mmid.eq(mmid_)).select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).unwrap().get(0).map(|f| f.clone())
     }
 
-    pub fn get_hash(&self, hash: &Hash) -> Option<&HashSet<Mmid>> {
-        self.hashes.get(hash)
+    pub fn get_hash(&self, hash_: &String) -> Option<Vec<MochiFile>> {
+        use schema::mochifiles::dsl::*;
+        let files = mochifiles.filter(hash.eq(hash_)).select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).expect("failed to load mochifiles by hash");
+        if files.is_empty() {
+            None
+        } else {
+            Some(files)
+        }
     }
 
-    pub fn entries(&self) -> Values<'_, Mmid, MochiFile> {
-        self.entries.values()
+    pub fn entries(&self) -> Vec<MochiFile> {
+        use schema::mochifiles::dsl::*;
+        mochifiles.select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).expect("failed to load all mochifiles")
     }
 }
 
 /// An entry in the database storing metadata about a file
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = crate::database::schema::mochifiles)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[derive(Debug, Clone, Serialize, Deserialize)]

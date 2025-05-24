@@ -35,7 +35,7 @@ pub fn server_info(settings: &State<Settings>) -> Json<ServerInfo> {
 #[get("/info/<mmid>")]
 pub async fn file_info(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Option<Json<MochiFile>> {
     let mmid: Mmid = mmid.try_into().ok()?;
-    let entry = db.read().unwrap().get(&mmid).cloned()?;
+    let entry = db.read().unwrap().get(&mmid)?;
 
     Some(Json(entry))
 }
@@ -47,7 +47,7 @@ pub async fn file_info_opengraph(
     mmid: &str,
 ) -> Option<Markup> {
     let mmid: Mmid = mmid.try_into().ok()?;
-    let entry = db.read().unwrap().get(&mmid).cloned()?;
+    let entry = db.read().unwrap().get(&mmid)?;
 
     let file = File::open(settings.file_dir.join(entry.hash().to_string()))
         .await
@@ -55,7 +55,7 @@ pub async fn file_info_opengraph(
 
     let size = to_pretty_size(file.metadata().await.ok()?.len());
 
-    let seconds_till_expiry = entry.expiry().signed_duration_since(Utc::now()).num_seconds();
+    let seconds_till_expiry = entry.expiry().and_utc().signed_duration_since(Utc::now()).num_seconds();
     let expiry = to_pretty_time(seconds_till_expiry as u32, BreakStyle::Space, TimeGranularity::Minutes);
 
     let title = entry.name().clone() + " - " + &size + " - " + &expiry;
@@ -95,7 +95,7 @@ pub struct ServerInfo {
 #[get("/f/<mmid>")]
 pub async fn lookup_mmid(db: &State<Arc<RwLock<Mochibase>>>, mmid: &str) -> Option<Redirect> {
     let mmid: Mmid = mmid.try_into().ok()?;
-    let entry = db.read().unwrap().get(&mmid).cloned()?;
+    let entry = db.read().unwrap().get(&mmid)?;
 
     Some(Redirect::to(uri!(lookup_mmid_name(
         mmid.to_string(),
@@ -111,7 +111,7 @@ pub async fn lookup_mmid_noredir(
     download: bool,
 ) -> Option<FileDownloader> {
     let mmid: Mmid = mmid.try_into().ok()?;
-    let entry = db.read().unwrap().get(&mmid).cloned()?;
+    let entry = db.read().unwrap().get(&mmid)?;
 
     let file = File::open(settings.file_dir.join(entry.hash().to_string()))
         .await
@@ -162,7 +162,7 @@ pub async fn lookup_mmid_name(
     name: &str,
 ) -> Option<(ContentType, File)> {
     let mmid: Mmid = mmid.try_into().ok()?;
-    let entry = db.read().unwrap().get(&mmid).cloned()?;
+    let entry = db.read().unwrap().get(&mmid)?;
 
     // If the name does not match, then this is invalid
     if name != entry.name() {
