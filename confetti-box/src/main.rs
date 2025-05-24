@@ -42,10 +42,10 @@ async fn main() {
     };
 
     let database = Arc::new(RwLock::new(
-        Mochibase::open_or_new(&config.database_path).expect("Failed to open or create database"),
+        Mochibase::open_or_new(&config.database_path.to_str().expect("Couldn't convert db path to str")).expect("Failed to open or create database"),
     ));
     let chunkbase = Arc::new(RwLock::new(Chunkbase::default()));
-    let local_db = database.clone();
+    // let local_db = database.clone();
     let local_chunk = chunkbase.clone();
 
     let (shutdown, rx) = tokio::sync::broadcast::channel(1);
@@ -104,13 +104,13 @@ async fn main() {
     shutdown.send(()).expect("Failed to stop cleaner thread.");
     info!("Stopping database cleaning thread completed successfully.");
 
-    info!("Saving database on shutdown...");
-    local_db
-        .write()
-        .unwrap()
-        .save()
-        .expect("Failed to save database");
-    info!("Saving database completed successfully.");
+    // info!("Saving database on shutdown...");
+    // local_db
+    //     .write()
+    //     .unwrap()
+    //     .save()
+    //     .expect("Failed to save database");
+    // info!("Saving database completed successfully.");
 
     info!("Deleting chunk data on shutdown...");
     local_chunk

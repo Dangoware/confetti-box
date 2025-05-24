@@ -5,7 +5,7 @@ diesel::table! {
         mmid -> Text,
         name -> Text,
         mime_type -> Text,
-        hash -> Text,
+        hash -> Binary,
         upload_datetime -> Timestamp,
         expiry_datetime -> Timestamp,
     }

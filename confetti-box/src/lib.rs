@@ -17,7 +17,7 @@ use crate::{
     strings::to_pretty_time,
 };
 use chrono::{TimeDelta, Utc};
-use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
+use database::{Chunkbase, ChunkedInfo, MHash, Mmid, MochiFile, Mochibase};
 use maud::{html, Markup, PreEscaped};
 use rocket::{
     data::ToByteUnit, futures::{SinkExt as _, StreamExt as _}, get, post, serde::{json::{self, Json}, Serialize}, tokio::{
@@ -217,7 +217,7 @@ pub async fn chunked_upload_finish(
     // If the hash does not exist in the database,
     // move the file to the backend, else, delete it
     // This also removes it from the chunk database
-    if main_db.read().unwrap().get_hash(&hash).is_none() {
+    if main_db.read().unwrap().get_hash(&MHash(hash)).is_none() {
         chunk_db.write().unwrap().move_and_remove_file(&uuid, &new_filename)?;
     } else {
         chunk_db.write().unwrap().remove_file(&uuid)?;
@@ -231,8 +231,8 @@ pub async fn chunked_upload_finish(
         chunked_info.1.name,
         file_type.media_type().to_string(),
         hash,
-        now,
-        now + chunked_info.1.expire_duration,
+        now.naive_utc(),
+        (now + chunked_info.1.expire_duration).naive_utc(),
     );
 
     main_db
@@ -322,8 +322,8 @@ pub async fn websocket_upload(
         // If the hash does not exist in the database,
         // move the file to the backend, else, delete it
         // This also removes it from the chunk database
-        if main_db.read().unwrap().get_hash(&hash).is_none() {
-            chunk_db.write().unwrap().move_and_remove_file(&uuid, &new_filename)?;
+        if main_db.read().unwrap().get_hash(&MHash(hash)).is_none() {
+            dbg!(chunk_db.write().unwrap().move_and_remove_file(&uuid, &new_filename))?;
         } else {
             chunk_db.write().unwrap().remove_file(&uuid)?;
         }
@@ -336,8 +336,8 @@ pub async fn websocket_upload(
             info.1.name,
             file_type.media_type().to_string(),
             hash,
-            now,
-            now + info.1.expire_duration,
+            now.naive_utc(),
+            (now + info.1.expire_duration).naive_utc(),
         );
 
         main_db

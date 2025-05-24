@@ -7,7 +7,7 @@ use std::{
 use blake3::Hash;
 use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
 use dotenvy::dotenv;
-use log::{error, info, warn};
+use log::{info, warn};
 use rand::distributions::{Alphanumeric, DistString};
 use rocket::{
     form::{self, FromFormField, ValueField},
@@ -16,17 +16,18 @@ use rocket::{
 use serde_with::serde_as;
 use uuid::Uuid;
 
-use diesel::prelude::*;
+use diesel::{expression::AsExpression, prelude::*, serialize::ToSql, sql_types::Binary, sqlite::Sqlite};
 
 pub struct Mochibase {
     path: PathBuf,
     /// connection to the db
-    db: Arc<Mutex<SqliteConnection>>,
+    pub db: Arc<Mutex<SqliteConnection>>,
 }
 
 impl Mochibase {
     /// Open the database from a path, **or create it if it does not exist**
     pub fn open_or_new<P: AsRef<str>>(path: &P) -> Result<Self, io::Error> {
+        println!("Open / New");
         dotenv().ok();
         let connection = SqliteConnection::establish(path.as_ref())
             .unwrap_or_else(|e| panic!("Failed to connect, error: {}", e));
@@ -42,6 +43,7 @@ impl Mochibase {
     ///
     /// If the database already contained this value, then `false` is returned.
     pub fn insert(&mut self, mmid_: &Mmid, entry: MochiFile) -> bool {
+        println!("Insert");
         use schema::mochifiles::dsl::*;
 
         let hash_matched_mmids: Vec<Mmid> = mochifiles
@@ -54,7 +56,7 @@ impl Mochibase {
         if hash_matched_mmids.contains(mmid_) {
                 return false;
         }
-        entry.insert_into(mochifiles).on_conflict_do_nothing();
+        entry.insert_into(mochifiles).on_conflict_do_nothing().execute(&mut *self.db.lock().unwrap()).unwrap();
 
         true
     }
@@ -63,6 +65,7 @@ impl Mochibase {
     ///
     /// If the database did not contain this value, then `false` is returned.
     pub fn remove_mmid(&mut self, mmid_: &Mmid) -> bool {
+        println!("Remove mmid");
         use schema::mochifiles::dsl::*;
 
         if diesel::delete(mochifiles.filter(mmid.eq(mmid_))).execute(&mut *self.db.lock().unwrap()).expect("Error deleting posts") > 0 {
@@ -72,34 +75,22 @@ impl Mochibase {
         }
     }
 
-    /// Remove a hash from the database entirely.
-    ///
-    /// Will not remove (returns [`Some(false)`] if hash contains references.
-    pub fn remove_hash(&mut self, hash: &Hash) -> Option<bool> {
-        if let Some(s) = self.hashes.get(hash) {
-            if s.is_empty() {
-                self.hashes.remove(hash);
-                Some(true)
-            } else {
-                Some(false)
-            }
-        } else {
-            None
-        }
-    }
-
     /// Checks if a hash contained in the database contains no more [`Mmid`]s.
-    pub fn is_hash_empty(&self, hash: &Hash) -> Option<bool> {
-        self.hashes.get(hash).map(|s| s.is_empty())
+    pub fn is_hash_valid(&self, hash_: &MHash) -> bool {
+        println!("Is Hash Valid?");
+        use schema::mochifiles::dsl::*;
+        !mochifiles.filter(hash.eq(hash_)).select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).unwrap().is_empty()
     }
 
     /// Get an entry by its [`Mmid`]. Returns [`None`] if the value does not exist.
     pub fn get(&self, mmid_: &Mmid) -> Option<MochiFile> {
+        println!("get mmid: {mmid_:?}");
         use schema::mochifiles::dsl::*;
         mochifiles.filter(mmid.eq(mmid_)).select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).unwrap().get(0).map(|f| f.clone())
     }
 
-    pub fn get_hash(&self, hash_: &String) -> Option<Vec<MochiFile>> {
+    pub fn get_hash(&self, hash_: &MHash) -> Option<Vec<MochiFile>> {
+        println!("get hash: {hash_:?}");
         use schema::mochifiles::dsl::*;
         let files = mochifiles.filter(hash.eq(hash_)).select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).expect("failed to load mochifiles by hash");
         if files.is_empty() {
@@ -111,7 +102,33 @@ impl Mochibase {
 
     pub fn entries(&self) -> Vec<MochiFile> {
         use schema::mochifiles::dsl::*;
-        mochifiles.select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).expect("failed to load all mochifiles")
+        dbg!(mochifiles.select(MochiFile::as_select()).load(&mut *self.db.lock().unwrap()).expect("failed to load all mochifiles"))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, AsExpression)]
+#[diesel(sql_type = Binary)]
+pub struct MHash(pub Hash);
+
+impl Queryable<Binary, Sqlite> for MHash {
+    type Row = *const [u8];
+
+    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
+        let mut val = [0u8;32];
+        val.copy_from_slice(unsafe { row.as_ref().unwrap() });
+        Ok(MHash(Hash::from_bytes(val)))
+    }
+}
+
+impl ToSql<Binary, Sqlite> for MHash {
+    fn to_sql<'b>(&'b self, out: &mut diesel::serialize::Output<'b, '_, Sqlite>) -> diesel::serialize::Result {
+        <[u8; 32] as ToSql<Binary, diesel::sqlite::Sqlite>>::to_sql(self.0.as_bytes(), out)
+    }
+}
+
+impl ToString for MHash {
+    fn to_string(&self) -> String {
+        self.0.to_string()
     }
 }
 
@@ -131,7 +148,7 @@ pub struct MochiFile {
     mime_type: String,
 
     /// The Blake3 hash of the file
-    hash: String,
+    hash: MHash,
 
     /// The datetime when the file was uploaded
     upload_datetime: chrono::NaiveDateTime,
@@ -147,7 +164,7 @@ impl MochiFile {
         mmid: Mmid,
         name: String,
         mime_type: String,
-        hash: String,
+        hash: Hash,
         upload: NaiveDateTime,
         expiry: NaiveDateTime,
     ) -> Self {
@@ -155,7 +172,7 @@ impl MochiFile {
             mmid,
             name,
             mime_type,
-            hash,
+            hash: MHash(hash),
             upload_datetime: upload,
             expiry_datetime: expiry,
         }
@@ -174,7 +191,7 @@ impl MochiFile {
         datetime > self.expiry_datetime.and_utc()
     }
 
-    pub fn hash(&self) -> &String {
+    pub fn hash(&self) -> &MHash {
         &self.hash
     }
 
@@ -197,9 +214,10 @@ pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     // Add expired entries to the removal list
     let files_to_remove: Vec<_> = database
         .entries()
+        .iter()
         .filter_map(|e| {
             if e.is_expired() {
-                Some((e.mmid().clone(), *e.hash()))
+                Some((e.mmid().clone(), e.hash().clone()))
             } else {
                 None
             }
@@ -209,24 +227,21 @@ pub fn clean_database(db: &Arc<RwLock<Mochibase>>, file_path: &Path) {
     let mut removed_files = 0;
     let mut removed_entries = 0;
     for e in &files_to_remove {
-        if database.remove_mmid(&e.0) {
-            removed_entries += 1;
-        }
-        if database.is_hash_empty(&e.1).is_some_and(|b| b) {
-            database.remove_hash(&e.1);
+
+        if !database.is_hash_valid(&e.1) {
             if let Err(e) = fs::remove_file(file_path.join(e.1.to_string())) {
                 warn!("Failed to remove expired hash: {}", e);
+
             } else {
+                if database.remove_mmid(&e.0) {
+                    removed_entries += 1;
+                }
                 removed_files += 1;
             }
         }
     }
 
     info!("Cleaned database.\n\t| Removed {removed_entries} expired entries.\n\t| Removed {removed_files} no longer referenced files.");
-
-    if let Err(e) = database.save() {
-        error!("Failed to save database: {e}")
-    }
     drop(database); // Just to be sure
 }
 
