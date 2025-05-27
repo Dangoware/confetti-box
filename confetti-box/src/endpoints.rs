@@ -8,10 +8,11 @@ use maud::{html, Markup, DOCTYPE};
 use rocket::{
     get, http::ContentType, response::{self, Redirect, Responder, Response}, serde::{self, json::Json}, tokio::{self, fs::File}, uri, Request, State
 };
+use ::serde::Deserialize;
 use serde::Serialize;
 
 use crate::{
-    database::{Mmid, MochiFile, Mochibase}, settings::Settings, strings::{to_pretty_size, to_pretty_time, BreakStyle, TimeGranularity}
+    database::{Mmid, MochiFile, Mochibase}, settings::Settings, strings::{to_pretty_size, pretty_time, BreakStyle, TimeGranularity}
 };
 
 /// An endpoint to obtain information about the server's capabilities
@@ -56,7 +57,7 @@ pub async fn file_info_opengraph(
     let size = to_pretty_size(file.metadata().await.ok()?.len());
 
     let seconds_till_expiry = entry.expiry().signed_duration_since(Utc::now()).num_seconds();
-    let expiry = to_pretty_time(seconds_till_expiry as u32, BreakStyle::Space, TimeGranularity::Minutes);
+    let expiry = pretty_time(seconds_till_expiry, BreakStyle::Space, TimeGranularity::Minutes);
 
     let title = entry.name().clone() + " - " + &size + " - " + &expiry;
 
@@ -82,14 +83,14 @@ pub async fn file_info_opengraph(
     })
 }
 
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
 pub struct ServerInfo {
-    max_filesize: u64,
-    max_duration: u32,
-    default_duration: u32,
+    pub max_filesize: u64,
+    pub max_duration: u32,
+    pub default_duration: u32,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    allowed_durations: Vec<u32>,
+    pub allowed_durations: Vec<u32>,
 }
 
 #[get("/f/<mmid>")]

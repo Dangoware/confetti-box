@@ -14,7 +14,7 @@ use std::{
 use crate::{
     pages::{footer, head},
     settings::Settings,
-    strings::to_pretty_time,
+    strings::pretty_time,
 };
 use chrono::{TimeDelta, Utc};
 use database::{Chunkbase, ChunkedInfo, Mmid, MochiFile, Mochibase};
@@ -48,7 +48,7 @@ pub fn home(settings: &State<Settings>) -> Markup {
                     button.button.{@if settings.duration.default == *d { "selected" }}
                     data-duration-seconds=(d.num_seconds())
                     {
-                        (PreEscaped(to_pretty_time(d.num_seconds() as u32, BreakStyle::Break, TimeGranularity::Seconds)))
+                        (PreEscaped(pretty_time(d.num_seconds() as u32, BreakStyle::Break, TimeGranularity::Seconds)))
                     }
                 }
             }

@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "confetti-box",
-    "confetti-cli",
+    "imu",
 ]
 
 [workspace.package]

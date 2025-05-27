@@ -1,18 +1,18 @@
-use std::{error::Error, fs, io::{self, Read, Write}, path::{Path, PathBuf}};
+use std::{error::Error, fs, io::{Read, Write}, path::{Path, PathBuf}};
 
 use base64::{prelude::BASE64_URL_SAFE, Engine};
 use chrono::{DateTime, Datelike, Local, Month, TimeDelta, Timelike, Utc};
 
+use confetti_box::{database::MochiFile, endpoints::ServerInfo, strings::{pretty_time, pretty_time_short, BreakStyle, TimeGranularity}};
 use futures_util::{stream::FusedStream as _, SinkExt as _, StreamExt as _};
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, join, task::JoinSet};
+use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, join};
 use tokio_tungstenite::{connect_async, tungstenite::{client::IntoClientRequest as _, Message}};
 use url::Url;
-use uuid::Uuid;
 use clap::{arg, builder::{styling::RgbColor, Styles}, Parser, Subcommand};
 use anyhow::{anyhow, bail, Context as _, Result};
 
@@ -101,13 +101,13 @@ async fn main() -> Result<()> {
                 Err(e) => return Err(anyhow!("Invalid duration: {e}")),
             };
 
-            if !config.info.as_ref().unwrap().allowed_durations.contains(&duration.num_seconds()) {
+            if !config.info.as_ref().unwrap().allowed_durations.contains(&(duration.num_seconds() as u32)) {
                 let pretty_durations: Vec<String> = config.info.as_ref()
                     .unwrap()
                     .allowed_durations
                     .clone()
                     .iter()
-                    .map(|d| pretty_time_short(*d))
+                    .map(|d| pretty_time_short(*d as i64))
                     .collect();
 
                 exit_error(
@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
                     &config.login
                 ).await.with_context(|| "Failed to upload").unwrap();
 
-                let datetime: DateTime<Local> = DateTime::from(response.expiry_datetime);
+                let datetime: DateTime<Local> = DateTime::from(response.expiry());
                 let date = format!(
                     "{} {}",
                     Month::try_from(u8::try_from(datetime.month()).unwrap()).unwrap().name(),
@@ -142,8 +142,11 @@ async fn main() -> Result<()> {
                 let time = format!("{:02}:{:02}", datetime.hour(), datetime.minute());
                 println!(
                     "{:>8} {}, {} (in {})\n{:>8} {}",
-                    "Expires:".truecolor(174,196,223).bold(), date, time, pretty_time_long(duration.num_seconds()),
-                    "URL:".truecolor(174,196,223).bold(), (url.to_string() + "/f/" + &response.mmid.0).underline()
+                    "Expires:".truecolor(174,196,223).bold(),
+                    date,
+                    time,
+                    pretty_time(duration.num_seconds(), BreakStyle::Space, TimeGranularity::Seconds),
+                    "URL:".truecolor(174,196,223).bold(), (url.to_string() + "/f/" + &response.mmid().to_string()).underline()
                 );
             }
         }
@@ -221,7 +224,7 @@ async fn main() -> Result<()> {
                 .await
                 .unwrap();
 
-                let out_directory = out_directory.join(info.name);
+                let out_directory = out_directory.join(info.name());
                 let mut out_file: File = tokio::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
@@ -527,82 +530,6 @@ async fn get_info(config: &Config) -> Result<ServerInfo> {
     Ok(info)
 }
 
-/// Attempts to fill a buffer completely from a stream, but if it cannot do so,
-/// it will only fill what it can read. If it has reached the end of a file, 0
-/// bytes will be read into the buffer.
-async fn fill_buffer<S: AsyncReadExt + Unpin>(buffer: &mut [u8], mut stream: S) -> Result<usize, io::Error> {
-    let mut bytes_read = 0;
-    while bytes_read < buffer.len() {
-        let len = stream.read(&mut buffer[bytes_read..]).await?;
-
-        if len == 0 {
-            break;
-        }
-
-        bytes_read += len;
-    }
-    Ok(bytes_read)
-}
-
-#[derive(Debug)]
-struct Upload {
-    file: File,
-    name: String,
-    duration: i64,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-struct ServerInfo {
-    max_filesize: u64,
-    max_duration: i64,
-    default_duration: i64,
-    allowed_durations: Vec<i64>,
-}
-
-#[derive(Serialize, Debug)]
-pub struct ChunkedInfo {
-    pub name: String,
-    pub size: u64,
-    pub expire_duration: u64,
-}
-
-#[derive(Serialize, Deserialize, Default, Debug)]
-pub struct ChunkedResponse {
-    status: bool,
-    message: String,
-
-    /// UUID used for associating the chunk with the final file
-    uuid: Option<Uuid>,
-
-    /// Valid max chunk size in bytes
-    chunk_size: Option<u64>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct MochiFile {
-    /// A unique identifier describing this file
-    mmid: Mmid,
-
-    /// The original name of the file
-    name: String,
-
-    /// The MIME type of the file
-    mime_type: String,
-
-    /// The Blake3 hash of the file
-    hash: String,
-
-    /// The datetime when the file was uploaded
-    upload_datetime: DateTime<Utc>,
-
-    /// The datetime when the file is set to expire
-    expiry_datetime: DateTime<Utc>,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
-#[derive(Deserialize, Serialize)]
-pub struct Mmid(String);
-
 #[derive(Deserialize, Serialize, Debug, Clone)]
 struct Login {
     user: String,
@@ -704,98 +631,6 @@ impl Config {
         fs::OpenOptions::new().create(true).write(true).truncate(true).open(path).unwrap().write_all(toml::to_string(self).unwrap().as_bytes()).unwrap();
         Ok(())
     }
-}
-
-fn parse_time_string(string: &str) -> Result<TimeDelta, Box<dyn Error>> {
-    if string.len() > 7 {
-        return Err("Not valid time string".into());
-    }
-
-    let unit = string.chars().last();
-    let multiplier = if let Some(u) = unit {
-        if !u.is_ascii_alphabetic() {
-            return Err("Not valid time string".into());
-        }
-
-        match u {
-            'D' | 'd' => TimeDelta::days(1),
-            'H' | 'h' => TimeDelta::hours(1),
-            'M' | 'm' => TimeDelta::minutes(1),
-            'S' | 's' => TimeDelta::seconds(1),
-            _ => return Err("Not valid time string".into()),
-        }
-    } else {
-        return Err("Not valid time string".into());
-    };
-
-    let time = if let Ok(n) = string[..string.len() - 1].parse::<i32>() {
-        n
-    } else {
-        return Err("Not valid time string".into());
-    };
-
-    let final_time = multiplier * time;
-
-    Ok(final_time)
-}
-
-fn pretty_time_short(seconds: i64) -> String {
-    let days = (seconds as f32 / 86400.0).floor();
-    let hour = ((seconds as f32 - (days * 86400.0)) / 3600.0).floor();
-    let mins = ((seconds as f32 - (hour * 3600.0) - (days * 86400.0)) / 60.0).floor();
-    let secs = seconds as f32 - (hour * 3600.0) - (mins * 60.0) - (days * 86400.0);
-
-    let days = if days > 0. {days.to_string() + "d"} else { "".into() };
-    let hour = if hour > 0. {hour.to_string() + "h"} else { "".into() };
-    let mins = if mins > 0. {mins.to_string() + "m"} else { "".into() };
-    let secs = if secs > 0. {secs.to_string() + "s"} else { "".into() };
-
-    (days + " " + &hour + " " + &mins + " " + &secs)
-    .trim()
-    .to_string()
-}
-
-fn pretty_time_long(seconds: i64) -> String {
-    let days = (seconds as f32 / 86400.0).floor();
-    let hour = ((seconds as f32 - (days * 86400.0)) / 3600.0).floor();
-    let mins = ((seconds as f32 - (hour * 3600.0) - (days * 86400.0)) / 60.0).floor();
-    let secs = seconds as f32 - (hour * 3600.0) - (mins * 60.0) - (days * 86400.0);
-
-    let days = if days == 0.0 {
-        "".to_string()
-    } else if days == 1.0 {
-        days.to_string() + " day"
-    } else {
-        days.to_string() + " days"
-    };
-
-    let hour = if hour == 0.0 {
-        "".to_string()
-    } else if hour == 1.0 {
-        hour.to_string() + " hour"
-    } else {
-        hour.to_string() + " hours"
-    };
-
-    let mins = if mins == 0.0 {
-        "".to_string()
-    } else if mins == 1.0 {
-        mins.to_string() + " minute"
-    } else {
-        mins.to_string() + " minutes"
-    };
-
-    let secs = if secs == 0.0 {
-        "".to_string()
-    } else if secs == 1.0 {
-        secs.to_string() + " second"
-    } else {
-        secs.to_string() + " seconds"
-    };
-
-    (days + " " + &hour + " " + &mins + " " + &secs)
-    .trim()
-    .to_string()
 }
 
 fn exit_error(main_message: String, fix: Option<String>, fix_values: Option<Vec<String>>) -> ! {

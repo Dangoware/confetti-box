@@ -49,7 +49,23 @@ pub enum TimeGranularity {
     Seconds,
 }
 
-pub fn to_pretty_time(seconds: u32, breaks: BreakStyle, granularity: TimeGranularity) -> String {
+pub fn pretty_time_short(seconds: i64) -> String {
+    let days = (seconds as f32 / 86400.0).floor();
+    let hour = ((seconds as f32 - (days * 86400.0)) / 3600.0).floor();
+    let mins = ((seconds as f32 - (hour * 3600.0) - (days * 86400.0)) / 60.0).floor();
+    let secs = seconds as f32 - (hour * 3600.0) - (mins * 60.0) - (days * 86400.0);
+
+    let days = if days > 0. {days.to_string() + "d"} else { "".into() };
+    let hour = if hour > 0. {hour.to_string() + "h"} else { "".into() };
+    let mins = if mins > 0. {mins.to_string() + "m"} else { "".into() };
+    let secs = if secs > 0. {secs.to_string() + "s"} else { "".into() };
+
+    (days + " " + &hour + " " + &mins + " " + &secs)
+    .trim()
+    .to_string()
+}
+
+pub fn pretty_time(seconds: i64, breaks: BreakStyle, granularity: TimeGranularity) -> String {
     let days = (seconds as f32 / 86400.0).floor();
     let hour = ((seconds as f32 - (days * 86400.0)) / 3600.0).floor();
     let mins = ((seconds as f32 - (hour * 3600.0) - (days * 86400.0)) / 60.0).floor();
