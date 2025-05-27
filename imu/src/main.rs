@@ -7,7 +7,7 @@ use confetti_box::{database::MochiFile, endpoints::ServerInfo, strings::{parse_t
 use futures_util::{stream::FusedStream as _, SinkExt as _, StreamExt as _};
 use indicatif::{ProgressBar, ProgressStyle};
 use owo_colors::OwoColorize;
-use reqwest::Client;
+use reqwest::{header::HeaderValue, Client};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{fs::File, io::{AsyncReadExt, AsyncWriteExt}, join};
@@ -146,7 +146,7 @@ async fn main() -> Result<()> {
                     date,
                     time,
                     pretty_time(duration.num_seconds(), BreakStyle::Space, TimeGranularity::Seconds),
-                    "URL:".truecolor(174,196,223).bold(), (url.to_string() + "/f/" + &response.mmid().to_string()).underline()
+                    "URL:".truecolor(174,196,223).bold(), (url.to_string() + "f/" + &response.mmid().to_string()).underline()
                 );
             }
         }
@@ -402,7 +402,9 @@ async fn upload_file<P: AsRef<Path>>(
     if let Some(l) = login {
         request.headers_mut().insert(
             "Authorization",
-            format!("Basic {}", BASE64_URL_SAFE.encode(format!("{}:{}", l.user, l.pass))).parse().unwrap()
+            HeaderValue::from_str(
+               &("Basic ".to_string() + &BASE64_URL_SAFE.encode(l.user.to_string() + ":" + &l.pass))
+            ).unwrap()
         );
     }
 
@@ -411,7 +413,7 @@ async fn upload_file<P: AsRef<Path>>(
 
     // Upload the file in chunks
     let upload_task = async move {
-        let mut chunk = vec![0u8; 20_000];
+        let mut chunk = vec![0u8; 200_000];
         loop {
             let read_len = file.read(&mut chunk).await.unwrap();
             if read_len == 0 {
