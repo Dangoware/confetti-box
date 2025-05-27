@@ -88,15 +88,15 @@ async fn main() -> Result<()> {
         Commands::Upload { files, duration } => {
             let Some(url) = config.url.clone() else {
                 exit_error(
-                    format!("URL is empty"),
-                    Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                    "URL is empty",
+                    Some(&format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
                     None,
                 );
             };
 
             get_info_if_expired(&mut config).await?;
 
-            let duration = match parse_time_string(&duration) {
+            let duration = match parse_time_string(duration) {
                 Ok(d) => d,
                 Err(e) => return Err(anyhow!("Invalid duration: {e}")),
             };
@@ -111,8 +111,8 @@ async fn main() -> Result<()> {
                     .collect();
 
                 exit_error(
-                    format!("Duration not allowed."),
-                    Some(format!("Please choose from:")),
+                    "Duration not allowed.",
+                    Some("Please choose from:"),
                     Some(pretty_durations)
                 );
             }
@@ -120,7 +120,7 @@ async fn main() -> Result<()> {
             println!("Uploading...");
             for path in files {
                 if !path.try_exists().is_ok_and(|t| t) {
-                    print_error_line(format!("The file {:#?} does not exist", path.truecolor(234, 129, 100)));
+                    print_error_line(&format!("The file {:#?} does not exist", path.truecolor(234, 129, 100)));
                     continue;
                 }
 
@@ -153,8 +153,8 @@ async fn main() -> Result<()> {
         Commands::Download { mmids, out_directory } => {
             let Some(url) = config.url else {
                 exit_error(
-                    format!("URL is empty"),
-                    Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                    "URL is empty",
+                    Some(&format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
                     None,
                 );
             };
@@ -165,14 +165,14 @@ async fn main() -> Result<()> {
                 let ddir = &config.download_directory;
                 if ddir.as_os_str().is_empty() {
                     exit_error(
-                        "Default download directory is empty".into(),
-                        Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                        "Default download directory is empty",
+                        Some(&format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
                         None,
                     );
                 } else if !ddir.exists() {
                     exit_error(
-                        format!("Default download directory {} does not exist", ddir.display()),
-                        Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+                        &format!("Default download directory {} does not exist", ddir.display()),
+                        Some(&format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
                         None,
                         )
                 } else {
@@ -185,12 +185,12 @@ async fn main() -> Result<()> {
                     if mmid.contains(format!("{url}/f/").as_str()) {
                         let mmid = mmid.replace(format!("{url}/f/").as_str(), "");
                         if mmid.len() != 8 {
-                            exit_error("{mmid} is not a valid MMID".into(), Some("MMID must be 8 characters long".into()), None)
+                            exit_error("{mmid} is not a valid MMID", Some("MMID must be 8 characters long"), None)
                         } else {
                             mmid
                         }
                     } else {
-                        exit_error("{mmid} is not a valid MMID".into(), Some("MMID must be 8 characters long".into()), None)
+                        exit_error("{mmid} is not a valid MMID", Some("MMID must be 8 characters long"), None)
                     }
                 } else {
                     unimplemented!();
@@ -211,7 +211,7 @@ async fn main() -> Result<()> {
                 .await {
                     file
                 } else {
-                    exit_error(format!("File with MMID {mmid} was not found"), None, None)
+                    exit_error("File with MMID {mmid} was not found", None, None)
                 };
 
                 let mut file_res = if let Some(login) = &config.login {
@@ -249,7 +249,7 @@ async fn main() -> Result<()> {
                         chunk_size = next.len() as u64;
                         first = false
                     }
-                    out_file.write(&next).await.unwrap();
+                    out_file.write_all(&next).await.unwrap();
 
                     progress_bar.set_position(f64::trunc(((i as f64 * chunk_size as f64) / file_size as f64) * 200.0) as u64);
                 }
@@ -266,15 +266,15 @@ async fn main() -> Result<()> {
         } => {
             if username.is_none() && password.is_none() && url.is_none() && dl_dir.is_none() {
                 exit_error(
-                    format!("Please provide an option to set"),
-                    Some(format!("Allowed options:")),
-                    Some(vec!["--username".into(), "--password".into(), "--url".into(), "--dl-dir".into()]),
+                    "Please provide an option to set",
+                    Some("Allowed options:"),
+                    Some(vec!["--username".to_string(), "--password".to_string(), "--url".to_string(), "--dl-dir".to_string()]),
                 );
             }
 
             if let Some(u) = username {
                 if u.is_empty() {
-                    exit_error(format!("Username cannot be blank!"), None, None);
+                    exit_error("Username cannot be blank!", None, None);
                 }
 
                 if let Some(l) = config.login.as_mut() {
@@ -291,7 +291,7 @@ async fn main() -> Result<()> {
             }
             if let Some(p) = password {
                 if p.is_empty() {
-                    exit_error(format!("Password cannot be blank"), None, None);
+                    exit_error("Password cannot be blank", None, None);
                 }
 
                 if let Some(l) = config.login.as_mut() {
@@ -308,10 +308,10 @@ async fn main() -> Result<()> {
             }
             if let Some(url) = url {
                 if url.is_empty() {
-                    exit_error(format!("URL cannot be blank"), None, None);
+                    exit_error("URL cannot be blank", None, None);
                 }
 
-                let url = if url.chars().last() == Some('/') {
+                let url = if url.ends_with('/') {
                     url.split_at(url.len() - 1).0
                 } else {
                     url
@@ -330,23 +330,23 @@ async fn main() -> Result<()> {
             }
             if let Some(mut dir) = dl_dir.clone() {
                 if dir.is_empty() {
-                    exit_error(format!("Download directory cannot be blank"), None, None);
+                    exit_error("Download directory cannot be blank", None, None);
                 }
                 if dir.as_str() == "default" {
                     dir = directories::UserDirs::new()
                     .unwrap()
                     .download_dir()
-                    .unwrap_or_else(|| exit_error("No Default directory available".into(), None, None))
+                    .unwrap_or_else(|| exit_error("No Default directory available", None, None))
                     .to_string_lossy()
                     .to_string();
                 }
-                if dir.chars().last() != Some('/') {
+                if dir.ends_with('/') {
                     dir.push('/');
                 }
 
                 let _dir = PathBuf::from(dir.clone());
                 if !_dir.exists() {
-                    exit_error(format!("Directory {dir} does not exist"), None, None)
+                    exit_error("Directory {dir} does not exist", None, None)
                 }
 
                 config.download_directory = _dir;
@@ -357,7 +357,7 @@ async fn main() -> Result<()> {
         Commands::Info => {
             let info = match get_info(&config).await {
                 Ok(i) => i,
-                Err(e) => exit_error(format!("Failed to get server information!"), Some(e.to_string()), None),
+                Err(e) => exit_error("Failed to get server information!", Some(e.to_string().as_str()), None),
             };
             config.info = Some(info);
             config.save().unwrap();
@@ -478,13 +478,13 @@ async fn upload_file<P: AsRef<Path>>(
 
 async fn get_info_if_expired(config: &mut Config) -> Result<()> {
     let now = Utc::now();
-    if !config.info_fetch.is_none() && !config.info_fetch.is_some_and(|e| e <= now) {
+    if config.info_fetch.is_some() && config.info_fetch.is_none_or(|e| e > now) {
         // Not yet ready to get a new batch of info
         return Ok(())
     }
     println!("{}", "Getting new server info...".truecolor(255,249,184));
 
-    let info = get_info(&config).await?;
+    let info = get_info(config).await?;
     config.info = Some(info);
     config.info_fetch = Some(now + TimeDelta::days(2));
     config.save().unwrap();
@@ -495,8 +495,8 @@ async fn get_info_if_expired(config: &mut Config) -> Result<()> {
 async fn get_info(config: &Config) -> Result<ServerInfo> {
     let Some(url) = config.url.clone() else {
         exit_error(
-            format!("URL is empty"),
-            Some(format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
+            "URL is empty",
+            Some(&format!("Please set it using the {} command", "set".truecolor(246,199,219).bold())),
             None,
         );
     };
@@ -563,21 +563,21 @@ impl Config {
                 c.save().unwrap();
                 return Ok(c);
             }
-        } else {
-            if let Some(dir) = directories::ProjectDirs::from("", "Dangoware", "confetti_cli") {
-                let path = dir.config_dir();
-                fs::create_dir(path).or_else(|err| {
-                    if err.kind() == std::io::ErrorKind::AlreadyExists {
-                        Ok(())
-                    } else {
-                        Err(err)
-                    }
-                })?;
+        } else if let Some(dir) = directories::ProjectDirs::from("", "Dangoware", "confetti_cli") {
+            let path = dir.config_dir();
+            fs::create_dir(path).or_else(|err| {
+                if err.kind() == std::io::ErrorKind::AlreadyExists {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            })?;
 
-                let mut buf: String = String::new();
+            let mut buf: String = String::new();
 
-                fs::OpenOptions::new()
+            fs::OpenOptions::new()
                 .create(true)
+                .truncate(false)
                 .write(true)
                 .read(true)
                 .open(path.join("config.toml"))
@@ -585,24 +585,23 @@ impl Config {
                 .read_to_string(&mut buf)
                 .unwrap();
 
-                if buf.is_empty() {
-                    let c = Config {
-                        url: None,
-                        login: None,
-                        info: None,
-                        info_fetch: None,
-                        download_directory: PathBuf::from(directories::UserDirs::new().unwrap().download_dir().unwrap_or(Path::new("")))
-                    };
-                    c.save().unwrap();
+            if buf.is_empty() {
+                let c = Config {
+                    url: None,
+                    login: None,
+                    info: None,
+                    info_fetch: None,
+                    download_directory: PathBuf::from(directories::UserDirs::new().unwrap().download_dir().unwrap_or(Path::new("")))
+                };
+                c.save().unwrap();
 
-                    // dbg!(path);
-                    return Ok(c);
-                } else {
-                    buf
-                }
+                // dbg!(path);
+                return Ok(c);
             } else {
-                panic!("no project dir?")
+                buf
             }
+        } else {
+            panic!("no project dir?")
         };
 
         Ok(toml::from_str::<Config>(c.as_str()).unwrap())
@@ -611,21 +610,19 @@ impl Config {
     fn save(&self) -> Result<(), ()> {
         let path = if cfg!(debug_assertions) {
             DEBUG_CONFIG.to_string()
+        } else if let Some(dir) = directories::ProjectDirs::from("", "Dangoware", "confetti_cli") {
+            let path = dir.config_dir();
+            fs::create_dir(path).or_else(|err| {
+                if err.kind() == std::io::ErrorKind::AlreadyExists {
+                    Ok(())
+                } else {
+                    Err(err)
+                }
+            }).unwrap();
+            let x = path.join("config.toml");
+            x.clone().to_str().unwrap().to_string()
         } else {
-            if let Some(dir) = directories::ProjectDirs::from("", "Dangoware", "confetti_cli") {
-                let path = dir.config_dir();
-                fs::create_dir(path).or_else(|err| {
-                    if err.kind() == std::io::ErrorKind::AlreadyExists {
-                        Ok(())
-                    } else {
-                        Err(err)
-                    }
-                }).unwrap();
-                let x = path.join("config.toml");
-                x.clone().to_str().unwrap().to_string()
-            } else {
-                panic!("no project dir?")
-            }
+            panic!("no project dir?")
         };
 
         fs::OpenOptions::new().create(true).write(true).truncate(true).open(path).unwrap().write_all(toml::to_string(self).unwrap().as_bytes()).unwrap();
@@ -633,7 +630,7 @@ impl Config {
     }
 }
 
-fn exit_error(main_message: String, fix: Option<String>, fix_values: Option<Vec<String>>) -> ! {
+fn exit_error(main_message: &str, fix: Option<&str>, fix_values: Option<Vec<String>>) -> ! {
     print_error_line(main_message);
 
     if let Some(f) = fix {
@@ -654,6 +651,6 @@ fn exit_error(main_message: String, fix: Option<String>, fix_values: Option<Vec<
     std::process::exit(1)
 }
 
-fn print_error_line(message: String) {
+fn print_error_line(message: &str) {
     eprintln!("{}: {message}", "Error".truecolor(181,66,127).italic().underline());
 }
