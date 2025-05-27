@@ -48,7 +48,7 @@ pub fn home(settings: &State<Settings>) -> Markup {
                     button.button.{@if settings.duration.default == *d { "selected" }}
                     data-duration-seconds=(d.num_seconds())
                     {
-                        (PreEscaped(pretty_time(d.num_seconds() as u32, BreakStyle::Break, TimeGranularity::Seconds)))
+                        (PreEscaped(pretty_time(d.num_seconds(), BreakStyle::Break, TimeGranularity::Seconds)))
                     }
                 }
             }
