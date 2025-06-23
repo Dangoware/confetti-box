@@ -228,7 +228,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
         socket.close();
     };
 
-    const chunkSize = 650_536;
+    const chunkSize = 65_536;
     socket.addEventListener("open", (_event) => {
         for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkSize) + 1; chunk_num ++) {
             const offset = Math.floor(chunk_num * chunkSize);
