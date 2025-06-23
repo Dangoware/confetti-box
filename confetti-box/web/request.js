@@ -228,7 +228,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
         socket.close();
     };
 
-    const chunkSize = 5_000_000;
+    const chunkSize = 650_536;
     socket.addEventListener("open", (_event) => {
         for (let chunk_num = 0; chunk_num < Math.floor(file.size / chunkSize) + 1; chunk_num ++) {
             const offset = Math.floor(chunk_num * chunkSize);
@@ -244,7 +244,7 @@ async function uploadFileWebsocket(file, duration, maxSize) {
         socket.addEventListener("message", (event) => {
             if (event.data instanceof ArrayBuffer) {
                 const view = new DataView(event.data);
-                console.log(view.getBigUint64(0, true));
+                //console.log(view.getBigUint64(0, true));
                 const progress = parseInt(view.getBigUint64(0, true));
                 uploadProgressWebsocket(progress, progressBar, progressText, file.size);
             } else {
