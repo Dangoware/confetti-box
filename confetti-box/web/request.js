@@ -69,6 +69,11 @@ async function sendFiles(files, duration, maxSize) {
         console.warn("This browser is known to have problems with WebSockets, falling back to chunked upload");
     }
 
+    if (files.length == 0) {
+        console.warn("There were no files provided to upload.");
+        return;
+    }
+
     const inProgressUploads = new Set();
     const concurrencyLimit = 3;
 
@@ -77,7 +82,7 @@ async function sendFiles(files, duration, maxSize) {
     try {
         wakeLock = await navigator.wakeLock.request("screen");
     } catch (err) {
-        console.warn("Failed to set wake-lock!");
+        console.warn("Failed to set wake-lock:", err);
     }
 
     let start = performance.now();
@@ -114,7 +119,7 @@ async function sendFiles(files, duration, maxSize) {
             wakeLock = null;
         });
     } catch (err) {
-        console.warn("Failed to modify wake-lock!");
+        console.warn("Failed to remove wake-lock:", err);
     }
 }
 
