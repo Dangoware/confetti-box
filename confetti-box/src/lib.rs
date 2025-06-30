@@ -8,7 +8,7 @@ pub mod utils;
 
 use std::{
     io::{self, ErrorKind},
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock}, time::Instant,
 };
 
 use crate::{
@@ -289,9 +289,11 @@ pub async fn websocket_upload(
     let file_dir = settings.file_dir.clone();
     let mut file = fs::File::create(&info.1.path).await.unwrap();
 
+    let mut timer = Instant::now();
+    let mut first_run = true;
+    let mut offset = 0;
+    let mut hasher = blake3::Hasher::new();
     Ok(ws.channel(move |mut stream| Box::pin(async move {
-        let mut offset = 0;
-        let mut hasher = blake3::Hasher::new();
         while let Some(message) = stream.next().await {
             if let Ok(m) = message.as_ref() {
                 if m.is_empty() {
@@ -308,7 +310,14 @@ pub async fn websocket_upload(
 
             hasher.update(&message);
 
-            stream.send(rocket_ws::Message::binary(offset.to_le_bytes().as_slice())).await.unwrap();
+            if first_run || timer.elapsed() > std::time::Duration::from_millis(100) {
+                stream.send(
+                    rocket_ws::Message::binary(offset.to_le_bytes().as_slice())
+                ).await.unwrap();
+
+                timer = Instant::now();
+                first_run = false;
+            }
 
             file.write_all(&message).await.unwrap();
 
