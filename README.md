@@ -15,6 +15,8 @@ A super simple file host. Inspired by [Catbox](https://catbox.moe) and
   serialized to a small, LZ4 compressed file.
 
 ### Planned
+- File upload "collections" which download as a zip/tar file
+- Smarter retrying on missed chunks/data in websockets
 - Theming
 - More mochi
 
