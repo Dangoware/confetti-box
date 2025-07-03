@@ -173,7 +173,6 @@ h2 code {
     margin: auto 0;
     margin-left: auto;
     width: min-content;
-    min-width: 32px;
     flex-shrink: 2;
     display: block;
 }
